@@ -1,0 +1,14 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/index?__p=/api/:path*" },
+    { "source": "/o/:token/:panel", "destination": "/o/index.html" },
+    { "source": "/o/:token", "destination": "/o/index.html" },
+    { "source": "/m/:id", "destination": "/m/index.html" },
+    { "source": "/t/:id", "destination": "/t/index.html" }
+  ],
+  "headers": [
+    { "source": "/(.*)", "headers": [ { "key": "X-Content-Type-Options", "value": "nosniff" }, { "key": "Referrer-Policy", "value": "same-origin" } ] },
+    { "source": "/o/(.*)", "headers": [ { "key": "Cache-Control", "value": "no-store" } ] }
+  ]
+}
