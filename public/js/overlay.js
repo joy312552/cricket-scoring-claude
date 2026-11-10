@@ -1,8 +1,9 @@
 // Browser-source overlay runtime. Read-only: renders server state, plays each celebration once.
 import { panel, fx } from './themes.js';
-const parts = location.pathname.split('/').filter(Boolean); // o, token, panel
-const token = parts[1], PANEL = (parts[2] || 'all').toLowerCase();
+import { subscribe } from './rt.js';
+const parts = location.pathname.split('/').filter(Boolean); // o, token, panel (legacy path form)
 const q = new URLSearchParams(location.search);
+const token = q.get('t') || parts[1], PANEL = (q.get('p') || parts[2] || 'all').toLowerCase();
 const PREVIEW = q.get('mode') === 'preview';
 if (q.get('bg') === 'checker') document.body.classList.add('checker');
 const ALIAS = { fullscreen: 'all', ticker: 'scoreboard', info: 'matchinfo', player: 'batterCard', lineup: 'lineupA', lineupa: 'lineupA', lineupb: 'lineupB', batterCard: 'batterCard', bowlerCard: 'bowlerCard' };
@@ -79,16 +80,20 @@ addEventListener('message', (ev) => { // dashboard preview only
 });
 
 function render() { setTheme(); applyScale(); renderTicker(); renderProgram(); }
+let timerId = 0, fetching = false, again = false, rtSub = null;
+const schedule = (ms) => { clearTimeout(timerId); timerId = setTimeout(poll, ms); };
 async function poll() {
-  let wait = 900;
+  if (fetching) { again = true; return; } fetching = true; again = false; let wait = 900;
   try {
     const r = await fetch(`/api/overlay/${encodeURIComponent(token)}?since=${ver ?? ''}&panel=${encodeURIComponent(PANEL_KEY)}`, { cache: 'no-store' });
     if (r.status === 404) { dead = true; S = null; tick.innerHTML = ''; gfx.innerHTML = ''; fxl.innerHTML = ''; wait = 5000; }
     else if (r.ok) { const j = await r.json(); serverNow = j.now || Date.now(); dead = false;
-      if (!j.same) { ver = j.v; S = j; serverNow = j.vm.now; S.vm.match.publicUrl = `${location.origin}/m/${S.vm.match.id}`; render(); ingest(j.events, j.latestSeq); }
-      else if (S && progShown && S.program.until && serverNow >= S.program.until) renderProgram(); }
+      if (!j.same) { ver = j.v; S = j; serverNow = j.vm.now; S.vm.match.publicUrl = `${location.origin}/m/?id=${S.vm.match.id}`; render(); ingest(j.events, j.latestSeq);
+        if (j.rt && !rtSub) rtSub = subscribe(j.rt, (p) => { if (p && p.v !== undefined && ver !== null && p.v <= ver) return; schedule(0); }); }
+      else if (S && progShown && S.program.until && serverNow >= S.program.until) renderProgram();
+      wait = rtSub && rtSub.connected() ? 3000 : 900; }
     else wait = 2500;
   } catch { wait = 2500; } // keep showing last known state, no error UI
-  setTimeout(poll, wait);
+  fetching = false; schedule(again ? 0 : wait);
 }
 poll();

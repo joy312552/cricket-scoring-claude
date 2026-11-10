@@ -60,12 +60,15 @@ test('full workflow: register -> teams -> match -> score -> undo -> broadcast ->
   const pub = await ok('GET', `/api/public/matches/${id}`); assert.equal(pub.vm.result.kind, 'won'); assert.equal(pub.vm.cards.length, 2);
   // every graphic renders for both themes, mid-match and finished, without throwing
   const pv = (await ok('GET', `/api/overlay/${tok}?panel=points`)).vm;
-  for (const th of ['arena', 'pulse']) {
+  for (const th of ['arena', 'pulse', 'mohua']) {
     for (const [, items] of GRAPHIC_LIST) for (const [k] of items) { const h = panel(th, k, pv); assert.equal(typeof h, 'string', k); }
     for (const [k] of FX_LIST) assert.ok(fx(th, k, { batterName: 'X', stat: { runs: 50, balls: 30 }, kind: 'caught', bowlerName: 'Y', fielderName: 'Z', runs: 10, wickets: 1, team: 'MYK' }, pv).includes('fx'), k);
     assert.ok(ticker(th, pv).length > 100);
   }
   assert.ok(panel('arena', 'result', pv).includes('won by'));
+  assert.ok(panel('mohua', 'compareBar', pv).includes('<svg') && panel('mohua', 'compareLine', pv).includes('polyline'));
+  assert.ok(panel('mohua', 'result', pv).includes('mh-venue') && panel('mohua', 'projected', pv).length > 20);
+  assert.ok(ticker('mohua', pv).includes('mh-tick'));
   assert.ok(panel('pulse', 'points', pv).includes('MYK'));
   const t = await ok('GET', `/api/public/tournaments/${tr.id}`); assert.equal(t.table[0].team, 'MYK'); assert.equal(t.table[0].pts, 2);
   // security: no cookie => cannot read private data / score; revoked token dies

@@ -15,12 +15,12 @@
 .min{min-height:420px}
 @media print{body{background:#fff!important;color:#000!important}.nav,.tb,#qrp,.btn,.hd .tn .tag{display:none!important}.hd{background:#fff!important;border-bottom:2px solid #000}.panel{background:#fff!important;border:1px solid #888!important;color:#000!important;break-inside:avoid}.panel:before,.panel:after{display:none}.t td,.t th{color:#000!important;border-color:#bbb!important}.is{background:#fff!important;border:1px solid #888!important;color:#000}.status{color:#000!important}.mono,small{color:#333!important}}
 </style></head><body>
-<header class="nav"><div class="wrap"><a class="logo" href="/"><svg viewBox="0 0 32 32"><g stroke="#d3ff3a" stroke-width="3" stroke-linecap="square"><path d="M8 6v22M16 6v22M24 6v22"/></g><path d="M5 7h22" stroke="#f1eee3" stroke-width="3"/></svg>CREASE</a><nav><button class="btn sm ghost" id="qrb">QR</button><button class="btn sm ghost" id="prn">Print</button><button class="btn sm ghost" id="share">Share</button></nav></div></header>
+<header class="nav"><div class="wrap"><a class="logo" href="/"><svg viewBox="0 0 32 32"><g stroke="#d3ff3a" stroke-width="3" stroke-linecap="square"><path d="M8 6v22M16 6v22M24 6v22"/></g><path d="M5 7h22" stroke="#f1eee3" stroke-width="3"/></svg>CREASE</a><nav><button class="btn sm ghost" id="qrb">QR</button><button class="btn sm ghost" id="simg">Save image</button><button class="btn sm ghost" id="prn">Print</button><button class="btn sm ghost" id="share">Share</button></nav></div></header>
 <div id="qrp" class="wrap" hidden style="padding-top:18px"><div class="panel" style="display:flex;gap:20px;align-items:center;flex-wrap:wrap"><div id="qrimg" style="width:180px;height:180px;background:#fff"></div><div><h3>Scan to follow live</h3><p class="mono" id="qrurl"></p></div></div></div>
 <div id="root"><div class="hd"><div class="wrap"><div class="skel line" style="width:40%"></div><div class="inn"><div class="skel blk" style="height:88px"></div><div class="skel blk" style="height:88px"></div></div></div></div><div class="wrap min"><div class="skel blk" style="margin-top:24px;height:260px"></div></div></div>
 <script type="module">
-import { ballChip, esc } from '/js/core.js'; import { qrSvg } from '/js/qr.js';
-const id = location.pathname.split('/').filter(Boolean)[1]; let tab = new URLSearchParams(location.search).get('print') ? 'card' : 'live', vm = null, ver = '';
+import { ballChip, esc } from '/js/core.js'; import { qrSvg } from '/js/qr.js'; import { subscribe } from '/js/rt.js'; import { openSummary } from '/js/summary-ui.js';
+const qs = new URLSearchParams(location.search), id = qs.get('id') || location.pathname.split('/').filter(Boolean)[1], PUB = `${location.origin}/m/?id=${id}`; let tab = qs.get('print') ? 'card' : 'live', vm = null, ver = '';
 const crest = (t) => t.logo ? `<img class="crestimg" src="${esc(t.logo)}" alt="">` : `<span class="crestimg" style="background:${esc(t.color)};color:${esc(t.color2)}">${esc(t.short.slice(0, 3))}</span>`;
 function status(v) { if (v.result) return v.result.text; const s = v.score; if (!s) return v.match.toss || 'Match not started'; if (s.target != null) return `${v.teams[v.bat].name} need ${s.need} from ${s.ballsLeft} balls`; return v.match.toss || ''; }
 const bat = (c) => `<div class="panel scroll bat" style="margin-bottom:16px"><h3>${esc(c.teamName)} <span class="num">${c.runs}/${c.wkts}</span> <span class="mono">${c.overs} ov</span></h3><table class="t"><thead><tr><th>Batter</th><th></th><th class="r">R</th><th class="r">B</th><th class="r">4s</th><th class="r">6s</th><th class="r">SR</th></tr></thead><tbody>${c.bat.map(b => `<tr><td><b>${esc(b.name)}</b></td><td class="o">${esc(b.out)}</td><td class="r num"><b>${b.runs}</b></td><td class="r num">${b.balls}</td><td class="r num">${b.fours}</td><td class="r num">${b.sixes}</td><td class="r num">${b.sr}</td></tr>`).join('')}</tbody></table><p class="mono" style="margin:10px 0 0">Extras ${esc(c.extras.text)}${c.yetToBat.length ? ' &middot; Yet to bat: ' + esc(c.yetToBat.join(', ')) : ''}</p></div>
@@ -42,9 +42,11 @@ function draw() {
   document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; draw(); });
 }
 async function load() { try { const r = await fetch(`/api/public/matches/${encodeURIComponent(id)}`, { cache: 'no-store' }); if (r.status === 404) { document.getElementById('root').innerHTML = '<div class="wrap" style="padding:80px 24px"><h1 style="font-size:64px">Match not found</h1><p style="color:var(--dim)">This match is private or does not exist.</p></div>'; return false; }
-  const j = await r.json(); if (String(j.v) !== ver) { ver = String(j.v); vm = j.vm; draw(); } } catch {} return true; }
-if (await load()) setInterval(load, 3000);
-document.getElementById('qrb').onclick = () => { const p = document.getElementById('qrp'); p.hidden = !p.hidden; document.getElementById('qrimg').innerHTML = qrSvg(location.href.split('?')[0], { margin: 1 }); document.getElementById('qrurl').textContent = location.href.split('?')[0]; };
+  const j = await r.json(); if (j.rt && !rtS) rtS = subscribe(j.rt, () => load()); if (String(j.v) !== ver) { ver = String(j.v); vm = j.vm; draw(); } } catch {} return true; }
+let rtS = null;
+if (await load()) setInterval(() => { if (!rtS || !rtS.connected()) load(); else if (Math.random() < 0.25) load(); }, 3000);
+document.getElementById('qrb').onclick = () => { const p = document.getElementById('qrp'); p.hidden = !p.hidden; document.getElementById('qrimg').innerHTML = qrSvg(PUB, { margin: 1 }); document.getElementById('qrurl').textContent = PUB; };
+document.getElementById('simg').onclick = () => { if (vm) openSummary(vm, PUB); };
 document.getElementById('prn').onclick = () => { tab = 'card'; if (vm) draw(); setTimeout(() => window.print(), 80); };
-document.getElementById('share').onclick = async () => { const u = location.href; try { if (navigator.share) await navigator.share({ title: document.title, url: u }); else { await navigator.clipboard.writeText(u); alert('Link copied'); } } catch {} };
+document.getElementById('share').onclick = async () => { const u = PUB; try { if (navigator.share) await navigator.share({ title: document.title, url: u }); else { await navigator.clipboard.writeText(u); alert('Link copied'); } } catch {} };
 </script></body></html>

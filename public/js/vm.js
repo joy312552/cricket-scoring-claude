@@ -2,6 +2,7 @@
 const overStr = (lb, bpo) => `${Math.floor(lb / bpo)}.${lb % bpo}`;
 const ROLE = { batter: 'BAT', bowler: 'BOWL', allrounder: 'AR', keeper: 'WK' };
 
+const s0 = (st) => (st.legalBalls ? (st.runs * st.rules.ballsPerOver) / st.legalBalls : 0);
 export function names(doc) {
   const m = {};
   for (const s of ['A', 'B']) for (const p of doc.sides[s].players) m[p.id] = p;
@@ -35,11 +36,14 @@ export function inningsCard(doc, inn) {
   const yet = st.battingXI.filter(id => !st.batters[id]).map(id => N[id]?.name || id);
   const bowlRows = Object.entries(st.bowlers).map(([id, b]) => ({ id, name: N[id]?.name || id, o: overStr(b.legalBalls, bpo), m: b.maidens, r: b.runs,
     w: b.wickets, econ: b.legalBalls ? +((b.runs * bpo) / b.legalBalls).toFixed(2) : 0, wd: b.wides, nb: b.noBalls, dots: b.dots }));
+  const per = {}; st.balls.forEach(b => { const k = b.over; per[k] ||= { o: k + 1, r: 0, w: 0 }; per[k].r += b.runs; if (b.wicket) per[k].w++; });
+  const maxO = Math.max(-1, ...Object.keys(per).map(Number)); let cum = 0; const ovr = [];
+  for (let i = 0; i <= maxO; i++) { const p = per[i] || { o: i + 1, r: 0, w: 0 }; cum += p.r; ovr.push({ ...p, cum }); }
   const e = st.extras, extra = e.wide + e.noball + e.bye + e.legbye + e.penalty;
   return { side: bat, team: doc.sides[bat].team.short, teamName: doc.sides[bat].team.name, bowlTeam: doc.sides[bowl].team.short,
     runs: st.runs, wkts: st.wickets, overs: overStr(st.legalBalls, bpo), bat: batRows, yetToBat: yet, bowl: bowlRows,
     extras: { total: extra, text: `${extra} (wd ${e.wide}, nb ${e.noball}, b ${e.bye}, lb ${e.legbye}, pen ${e.penalty})` },
-    fow: st.fow.map(f => ({ w: f.wicket, runs: f.runs, name: N[f.batter]?.name || f.batter, at: f.at })), status: st.status };
+    ovr, fow: st.fow.map(f => ({ w: f.wicket, runs: f.runs, name: N[f.batter]?.name || f.batter, at: f.at })), status: st.status };
 }
 
 export function buildVM(doc, extra = {}) {
@@ -65,6 +69,7 @@ export function buildVM(doc, extra = {}) {
     vm.score = { runs: st.runs, wkts: st.wickets, overs: overStr(st.legalBalls, bpo), crr: st.legalBalls ? +((st.runs * bpo) / st.legalBalls).toFixed(2) : 0,
       target: st.target, need: req, ballsLeft: left, rrr: req != null && left > 0 ? +((req * bpo) / left).toFixed(2) : null, freeHit: !!st.freeHit,
       oversLimit: st.rules.oversLimit, complete: st.status === 'complete', reason: st.endReason };
+    if (st.legalBalls > 0) { const rem = left / bpo, crr = s0(st), r1 = Math.ceil(crr) + 2, r2 = r1 + 2; vm.score.proj = [{ label: `CURRENT (${crr.toFixed(2)}) RPO`, score: Math.round(st.runs + crr * rem) }, { label: `${r1} RPO`, score: Math.round(st.runs + r1 * rem) }, { label: `${r2} RPO`, score: Math.round(st.runs + r2 * rem) }]; }
     if (doc.cur === 1 || (doc.innings.length > 1)) { const f = doc.innings[0].state; vm.firstInn = { short: T(doc.innings[0].side).short, runs: f.runs, wkts: f.wickets, overs: overStr(f.legalBalls, f.rules.ballsPerOver) }; }
     vm.batters = vm.card.bat.filter(b => b.atCrease && !b.isOut).sort((a, b) => (b.strike ? 1 : 0) - (a.strike ? 1 : 0));
     const bw = st.bowler || st.prevBowler; const br = vm.card.bowl.find(b => b.id === bw); vm.bowler = br ? { ...br, current: !!st.bowler } : null;

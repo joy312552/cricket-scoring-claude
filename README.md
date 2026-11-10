@@ -54,9 +54,30 @@ Without the Supabase variables the site still runs, but data lives in memory and
 1. Create a free account at resend.com and an API key. 2. Add `RESEND_API_KEY` (and `EMAIL_FROM` once you verify a domain) in Vercel. 3. Redeploy.
 Set `REQUIRE_VERIFIED=1` only after email works, otherwise nobody can sign in.
 
+## Realtime (instant updates)
+
+Updates are pushed with Supabase Realtime (Broadcast). The browser only receives a tiny "version changed" ping on a secret channel, then loads the real data through the normal authorised endpoints.
+1. Supabase -> Project Settings -> API Keys: copy the **publishable** (anon) key. It is safe to be public.
+2. Vercel -> add `SUPABASE_ANON_KEY` = that key, then Redeploy.
+3. Supabase -> Project Settings -> Realtime: make sure public access is allowed.
+Without `SUPABASE_ANON_KEY` everything still works using fast polling (about 1 second).
+**Speed tip:** in Vercel -> Settings -> Functions, set the Function Region to the region closest to your Supabase project.
+
+## Links
+
+Share links use the form `/m/?id=MATCH_ID`, `/t/?id=TOURNAMENT_ID`, `/o/?t=TOKEN&p=all` (they work without any URL rewriting). Old path-style links still work when rewrites are active.
+
+## Themes
+
+ARENA (navy and gold), PULSE (graphite and lime), MOHUA (royal purple, cyan and gold, from the supplied design JSON). New graphics: timeline, projected score, over comparison bars, run progression line, both playing XIs.
+
+## Match summary picture
+
+Console, Studio -> Links & access, and the public page have a button that draws a branded 1080x1350 picture (download or share).
+
 ## Honest limits
 
-- Overlays and the public page **poll** (about every 0.9 s overlay, 3 s public) instead of using Supabase Realtime. Fine for small and medium audiences.
+- Realtime needs `SUPABASE_ANON_KEY` (see above) and could not be tested against a live Supabase from the build environment; polling is the automatic fallback.
 - Not built: Test-match multi-innings, "social media info" graphic, a separate hand-designed layout for every table-style panel in each theme (the ticker, celebrations and key panels are distinct per theme; scorecards share structure).
 - Rate limiting is in-memory per serverless instance (best effort).
 - Row Level Security: the table has RLS on with no policies; only the server (service key) touches it.

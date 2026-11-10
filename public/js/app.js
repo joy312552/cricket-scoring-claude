@@ -62,7 +62,7 @@ async function overview() {
 }
 function matchCards(ms) {
   return ms.map(m => `<div class="mcard ${m.status === 'live' ? 'live' : ''}"><div><h4>${esc(m.a)} vs ${esc(m.b)} ${statusTag(m.status)}</h4><div class="sc">${esc(m.name)} • ${fmtDate(m.date)}${m.score.length ? ' • ' + m.score.join(' | ') : ''}${m.result ? ' • ' + esc(m.result) : ''}</div></div>
-   <div class="actions">${m.status === 'setup' ? `<a class="btn sm" href="#/match/${m.id}/setup">Set up</a>` : `<a class="btn sm" href="#/match/${m.id}/score">Score</a>`}<a class="btn sm ghost" href="#/match/${m.id}/broadcast">Studio</a>${m.public ? `<a class="btn sm ghost" target="_blank" href="/m/${m.id}">Public</a>` : ''}</div></div>`).join('');
+   <div class="actions">${m.status === 'setup' ? `<a class="btn sm" href="#/match/${m.id}/setup">Set up</a>` : `<a class="btn sm" href="#/match/${m.id}/score">Score</a>`}<a class="btn sm ghost" href="#/match/${m.id}/broadcast">Studio</a>${m.public ? `<a class="btn sm ghost" target="_blank" href="/m/?id=${m.id}">Public</a>` : ''}</div></div>`).join('');
 }
 
 // ---------- CRUD lists ----------
@@ -78,23 +78,23 @@ const FIELDS = {
 async function edit(coll, item) {
   const f = typeof FIELDS[coll] === 'function' ? FIELDS[coll]() : FIELDS[coll];
   const v = await formModal({ title: item ? 'Edit' : 'Add', fields: f, values: item || {} }); if (!v) return false;
-  try { await api('PUT', `/api/c/${coll}`, { ...v, id: item?.id }); toast('Saved'); return true; } catch (e) { toast(e.message, true); return false; }
+  try { const rec = await api('PUT', `/api/c/${coll}`, { ...v, id: item?.id }); const arr = S.data[coll]; const i = arr.findIndex(x => x.id === rec.id); if (i >= 0) arr[i] = rec; else arr.push(rec); toast('Saved'); return true; } catch (e) { toast(e.message, true); return false; }
 }
 async function crud(coll, title, rowFn, cols) {
   shell('/' + coll, head(title) + `<div class="grid">${sk(3)}</div>`); await load();
   const draw = () => {
     const list = S.data[coll];
     shell('/' + coll, head(title, `<button class="btn" data-add>+ Add</button>`) + (list.length ? `<div class="panel scroll"><table class="t"><thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}<th></th></tr></thead><tbody>${list.map(x => `<tr>${rowFn(x)}<td class="r"><button class="btn sm ghost" data-e="${x.id}">Edit</button> <button class="btn sm ghost" data-d="${x.id}">Delete</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="panel">Nothing here yet.</div>`));
-    $('[data-add]').onclick = async () => { if (await edit(coll)) { await load(); draw(); } };
-    $$('[data-e]').forEach(b => b.onclick = async () => { if (await edit(coll, list.find(x => x.id === b.dataset.e))) { await load(); draw(); } });
-    $$('[data-d]').forEach(b => b.onclick = async () => { if (await confirmBox('Delete this item? Existing matches keep their own copy.')) { await api('DELETE', `/api/c/${coll}/${b.dataset.d}`); await load(); draw(); } });
+    $('[data-add]').onclick = async () => { if (await edit(coll)) draw(); };
+    $$('[data-e]').forEach(b => b.onclick = async () => { if (await edit(coll, list.find(x => x.id === b.dataset.e))) draw(); });
+    $$('[data-d]').forEach(b => b.onclick = async () => { if (await confirmBox('Delete this item? Existing matches keep their own copy.')) { const id = b.dataset.d; S.data[coll] = S.data[coll].filter(x => x.id !== id); draw(); api('DELETE', `/api/c/${coll}/${id}`).catch(e => { toast(e.message, true); load().then(draw); }); } });
   };
   draw(); if (location.hash.includes('new=1')) { history.replaceState(null, '', '#/' + coll); $('[data-add]').click(); }
 }
 const teamsView = () => crud('teams', 'Teams', t => `<td>${crest(t)} <b>${esc(t.name)}</b></td><td>${esc(t.short)}</td><td>${esc(t.ground)}</td><td>${S.data.players.filter(p => (p.teamIds || []).includes(t.id)).length}</td>`, ['Team', 'Short', 'Ground', 'Players']);
 const playersView = () => crud('players', 'Players', p => `<td><b>${esc(p.name)}</b> <span class="mono">${esc(p.jersey ? '#' + p.jersey : '')}</span></td><td>${esc(p.role)}</td><td>${(p.teamIds || []).map(i => esc(team(i)?.short || '')).join(', ')}</td><td>${esc(p.bat)}</td>`, ['Player', 'Role', 'Teams', 'Batting']);
 const sponsorsView = () => crud('sponsors', 'Sponsors', s => `<td>${s.logo ? `<img src="${esc(s.logo)}" height="30">` : ''} <b>${esc(s.name)}</b></td><td>${esc(s.message)}</td>`, ['Sponsor', 'Message']);
-const tournamentsView = () => crud('tournaments', 'Tournaments', t => `<td><b>${esc(t.name)}</b></td><td>${esc(t.format)}</td><td>${t.overs} ov</td><td>${(t.teamIds || []).length} teams</td><td><a class="mono" style="color:var(--lime)" target="_blank" href="/t/${t.id}">Public page</a></td>`, ['Tournament', 'Format', 'Overs', 'Teams', 'Link']);
+const tournamentsView = () => crud('tournaments', 'Tournaments', t => `<td><b>${esc(t.name)}</b></td><td>${esc(t.format)}</td><td>${t.overs} ov</td><td>${(t.teamIds || []).length} teams</td><td><a class="mono" style="color:var(--lime)" target="_blank" href="/t/?id=${t.id}">Public page</a></td>`, ['Tournament', 'Format', 'Overs', 'Teams', 'Link']);
 
 // ---------- matches ----------
 async function matchesView() {
@@ -150,8 +150,8 @@ async function pickMatch(path, title, verb, to, filter) {
   shell(path, head(title) + `<div class="grid">${ms.map(m => `<div class="mcard ${m.status === 'live' ? 'live' : ''}"><div><h4>${esc(m.a)} vs ${esc(m.b)} ${statusTag(m.status)}</h4><div class="sc">${esc(m.name)}${m.score.length ? ' • ' + m.score.join(' | ') : ''}</div></div><a class="btn" href="#/match/${m.id}/${m.status === 'setup' ? 'setup' : to}">${m.status === 'setup' ? 'Set up' : verb}</a></div>`).join('') || '<div class="panel">No matches yet. <a href="#/matches?new=1" style="color:var(--lime)">Create one</a>.</div>'}</div>`);
 }
 async function overlaysView() {
-  shell('/overlays', head('Overlay themes') + `<p style="color:var(--dim);max-width:720px">Every match gets its own secret browser-source link. Open a match in the Broadcast studio to copy URLs and switch theme. Below: both themes rendering a live sample.</p><div class="grid g2"><div><div id="ov1"></div><h3 style="margin-top:10px">ARENA</h3><span class="mono">Premium international broadcast</span></div><div><div id="ov2"></div><h3 style="margin-top:10px">PULSE</h3><span class="mono">Modern dynamic sports tech</span></div></div>`);
-  const vm = sampleVM(); [['#ov1', 'arena'], ['#ov2', 'pulse']].forEach(([s, t]) => { const st = mountStage($(s), t); st.ticker(vm); st.graphic('batting', vm); });
+  shell('/overlays', head('Overlay themes') + `<p style="color:var(--dim);max-width:720px">Every match gets its own secret browser-source link. Open a match in the Broadcast studio to copy URLs and switch theme. Below: both themes rendering a live sample.</p><div class="grid g2"><div><div id="ov1"></div><h3 style="margin-top:10px">ARENA</h3><span class="mono">Premium international broadcast</span></div><div><div id="ov2"></div><h3 style="margin-top:10px">PULSE</h3><span class="mono">Modern dynamic sports tech</span></div><div><div id="ov3"></div><h3 style="margin-top:10px">MOHUA</h3><span class="mono">Royal purple, cyan and gold</span></div></div>`);
+  const vm = sampleVM(); [['#ov1', 'arena'], ['#ov2', 'pulse'], ['#ov3', 'mohua']].forEach(([s, t]) => { const st = mountStage($(s), t); st.ticker(vm); st.graphic('batting', vm); });
 }
 async function statsView() {
   shell('/stats', head('Statistics') + sk(2)); const s = await api('GET', '/api/stats').catch(e => (toast(e.message, true), null)); if (!s) return;

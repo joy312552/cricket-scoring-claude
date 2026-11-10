@@ -1,5 +1,7 @@
 import { $, $$, api, toast, esc, copy, modal, ballChip, download } from './core.js';
 import { qrSvg } from './qr.js';
+import { subscribe } from './rt.js';
+import { openSummary } from './summary-ui.js';
 import { GRAPHIC_LIST, FX_LIST } from './themes.js';
 
 export async function renderBroadcast(root, id, ctx) {
@@ -8,7 +10,7 @@ export async function renderBroadcast(root, id, ctx) {
   const B = () => $('#bc');
   async function refresh(repaint = true) { try { M = await api('GET', `/api/matches/${id}`); if (repaint) paint(); } catch (e) { toast(e.message, true); } }
   async function act(body, msg) { if (busy) return; busy = true; try { const r = await api('POST', `/api/broadcast/${id}`, body); if (msg) toast(msg); await refresh(); return r; } catch (e) { toast(e.message, true); } finally { busy = false; } }
-  const url = (panel, q = '') => `${base}/o/${M.links.token}/${panel}${q}`;
+  const url = (panel, q = '') => `${base}/o/?t=${M.links.token}&p=${panel}${q}`;
 
   function paint() {
     if (!M) return; if (!M.perms.broadcast) { B().innerHTML = '<div class="panel">You do not have broadcast permission for this match.</div>'; return; }
@@ -24,7 +26,7 @@ export async function renderBroadcast(root, id, ctx) {
   function studio() {
     const d = M.doc, vm = M.vm, pg = d.program, pv = d.preview, tb = $('#tabbody');
     if (!$('#mons')) {
-      tb.innerHTML = `<div class="bc"><div class="panel glist" id="gl"></div><div class="center"><div class="monpair" id="mons"><div class="mon pv"><span class="lab">PREVIEW</span><iframe id="ifp" src="/o/${M.links.token}/all?mode=preview&bg=checker" title="preview"></iframe></div><div class="mon pg"><span class="lab">ON AIR</span><iframe id="ifg" src="/o/${M.links.token}/all?bg=checker" title="program"></iframe></div></div><div class="panel" style="margin-top:12px" id="strip"></div></div><div class="panel" id="rt"></div></div>`;
+      tb.innerHTML = `<div class="bc"><div class="panel glist" id="gl"></div><div class="center"><div class="monpair" id="mons"><div class="mon pv"><span class="lab">PREVIEW</span><iframe id="ifp" src="/o/?t=${M.links.token}&p=all&mode=preview&bg=checker" title="preview"></iframe></div><div class="mon pg"><span class="lab">ON AIR</span><iframe id="ifg" src="/o/?t=${M.links.token}&p=all&bg=checker" title="program"></iframe></div></div><div class="panel" style="margin-top:12px" id="strip"></div></div><div class="panel" id="rt"></div></div>`;
       const fit = () => $$('.mon').forEach(m => { const f = m.querySelector('iframe'); f.style.transform = `scale(${m.clientWidth / 1920})`; }); new ResizeObserver(fit).observe($('#mons')); fit();
     }
     $('#gl').innerHTML = `<h3>Graphics</h3>` + GRAPHIC_LIST.map(([cat, items]) => `<h4>${cat}</h4>` + items.map(([k, l]) => `<button class="${pv?.graphic === k ? 'stg' : ''} ${pg.graphic === k ? 'air' : ''}" data-g="${k}"><span>${l}</span><span class="mono">${pg.graphic === k ? 'ON AIR' : pv?.graphic === k ? 'STAGED' : ''}</span></button>`).join('')).join('');
@@ -36,7 +38,7 @@ export async function renderBroadcast(root, id, ctx) {
     $('#rt').innerHTML = `<button class="btn red takebtn" data-take>TAKE TO AIR</button><div class="rowb"><button class="btn ghost" data-hide>Hide graphic</button><button class="btn ghost" data-clear>Clear all</button><button class="btn ghost" data-replay>Replay last</button><button class="btn ghost" data-tick>${st.ticker ? 'Hide' : 'Show'} scoreboard</button></div>
       <h4 class="mono" style="margin:18px 0 6px">Auto-hide after</h4><div class="chips">${[[0, 'Manual'], [6, '6 s'], [10, '10 s'], [15, '15 s']].map(([v, l]) => `<span class="chip ${duration === v ? 'on' : ''}" data-dur="${v}">${l}</span>`).join('')}</div>
       <h4 class="mono" style="margin:18px 0 6px">Scoreboard position</h4><div class="chips">${['bottom', 'top'].map(v => `<span class="chip ${st.position === v ? 'on' : ''}" data-pos="${v}">${v}</span>`).join('')}</div>
-      <h4 class="mono" style="margin:18px 0 6px">Theme</h4><div class="chips">${['arena', 'pulse'].map(v => `<span class="chip ${st.theme === v ? 'on' : ''}" data-th="${v}">${v.toUpperCase()}</span>`).join('')}</div>
+      <h4 class="mono" style="margin:18px 0 6px">Theme</h4><div class="chips">${['arena', 'pulse', 'mohua'].map(v => `<span class="chip ${st.theme === v ? 'on' : ''}" data-th="${v}">${v.toUpperCase()}</span>`).join('')}</div>
       <h4 class="mono" style="margin:18px 0 6px">Trigger celebration (on air)</h4><div class="chips">${['four', 'six', 'wicket'].map(v => `<span class="chip" data-fx="${v}">${v.toUpperCase()}</span>`).join('')}</div>
       <h4 class="mono" style="margin:18px 0 6px">Test in preview only</h4><div class="chips">${FX_LIST.slice(0, 6).map(([v, l]) => `<span class="chip" data-test="${v}">${l}</span>`).join('')}</div>
       ${d.pending.length ? `<h4 class="mono" style="margin:18px 0 6px;color:var(--org)">Waiting for approval</h4>${d.pending.map(e => `<div class="ev"><b>${esc(e.fx.toUpperCase())}</b><span style="flex:1">${esc(e.payload.batterName || e.payload.bowlerName || '')}</span><button class="btn sm" data-ap="${e.seq}">Show</button><button class="btn sm ghost" data-dm="${e.seq}">x</button></div>`).join('')}` : ''}`;
@@ -78,16 +80,18 @@ export async function renderBroadcast(root, id, ctx) {
     $('#tabbody').innerHTML = `<div class="grid g2"><div class="panel"><h3>Overlay URLs</h3><p style="color:var(--dim);font-size:14px">Add as a Browser Source in OBS, vMix, PRISM, Streamlabs or Wirecast. Width 1920, height 1080. Transparent background is automatic. Treat these links like passwords.</p>
       ${L.map(([k, l]) => `<div class="linkrow"><span>${l}</span><code>${esc(url(k))}</code><button class="btn sm ghost" data-cp="${esc(url(k))}">Copy</button></div>`).join('')}
       <div class="actions" style="margin-top:14px"><button class="btn red sm" data-rot>Revoke and create new links</button></div></div>
-      <div><div class="panel"><h3>Share</h3><div style="display:flex;gap:16px;align-items:center;margin-bottom:10px"><div style="width:130px;height:130px;background:#fff;flex:none">${qrSvg(`${base}/m/${id}`, { margin: 1 })}</div><span class="mono">Scan to open the public scoreboard. Show the QR on air from Graphics &rarr; Branding.</span></div><div class="linkrow"><span>Public scoreboard</span><code>${base}/m/${id}</code><button class="btn sm ghost" data-cp="${base}/m/${id}">Copy</button></div><label class="sw" style="margin-top:8px"><input type="checkbox" id="pub" ${d.public ? 'checked' : ''}> Public page is on</label>${d.tournamentId ? `<div class="linkrow"><span>Tournament page</span><code>${base}/t/${d.tournamentId}</code><button class="btn sm ghost" data-cp="${base}/t/${d.tournamentId}">Copy</button></div>` : ''}</div>
-      <div class="panel" style="margin-top:16px"><h3>Export</h3><div class="actions"><button class="btn sm ghost" data-ex="csv">Deliveries CSV</button><button class="btn sm ghost" data-ex="json">Full match JSON</button><a class="btn sm ghost" target="_blank" href="/m/${id}?print=1">Printable scorecard</a></div></div>
+      <div><div class="panel"><h3>Share</h3><div style="display:flex;gap:16px;align-items:center;margin-bottom:10px"><div style="width:130px;height:130px;background:#fff;flex:none">${qrSvg(`${base}/m/?id=${id}`, { margin: 1 })}</div><span class="mono">Scan to open the public scoreboard. Show the QR on air from Graphics &rarr; Branding.</span></div><div class="linkrow"><span>Public scoreboard</span><code>${base}/m/?id=${id}</code><button class="btn sm ghost" data-cp="${base}/m/?id=${id}">Copy</button></div><label class="sw" style="margin-top:8px"><input type="checkbox" id="pub" ${d.public ? 'checked' : ''}> Public page is on</label>${d.tournamentId ? `<div class="linkrow"><span>Tournament page</span><code>${base}/t/?id=${d.tournamentId}</code><button class="btn sm ghost" data-cp="${base}/t/?id=${d.tournamentId}">Copy</button></div>` : ''}</div>
+      <div class="panel" style="margin-top:16px"><h3>Export</h3><div class="actions"><button class="btn" data-simg>Match summary picture</button><button class="btn sm ghost" data-ex="csv">Deliveries CSV</button><button class="btn sm ghost" data-ex="json">Full match JSON</button><a class="btn sm ghost" target="_blank" href="/m/?id=${id}&print=1">Printable scorecard</a></div></div>
       <div class="panel" style="margin-top:16px"><h3>Access</h3><p style="color:var(--dim);font-size:14px">Invite a registered user. Scoring and broadcast are separate permissions.</p>${(d.members || []).map(m => `<div class="ev"><b style="flex:1">${esc(m.email)}</b>${m.score ? '<span class="tag ok">score</span>' : ''}${m.broadcast ? '<span class="tag lime">broadcast</span>' : ''}</div>`).join('')}
       ${M.perms.owner ? `<div class="grid" style="margin-top:10px"><input id="inv" type="email" placeholder="email@example.com"><label class="sw"><input type="checkbox" id="ps"> Can update score</label><label class="sw"><input type="checkbox" id="pb" checked> Can control broadcast</label><button class="btn sm" data-inv>Invite</button></div>` : ''}</div></div></div>`;
     $$('[data-cp]').forEach(b => b.onclick = () => copy(b.dataset.cp));
+    $('[data-simg]')?.addEventListener('click', () => openSummary(M.vm, `${base}/m/?id=${id}`));
     $$('[data-ex]').forEach(b => b.onclick = () => download(`/api/matches/${id}/export?format=${b.dataset.ex}`, `${id}.${b.dataset.ex}`).catch(e => toast(e.message, true)));
     $('[data-rot]')?.addEventListener('click', async () => { if (!confirm('Old links stop working immediately. Continue?')) return; try { await api('POST', `/api/matches/${id}/token/rotate`); toast('New links created'); await refresh(); } catch (e) { toast(e.message, true); } });
     $('#pub')?.addEventListener('change', async (e) => { try { await api('POST', `/api/matches/${id}/finish`, { public: e.target.checked }); toast('Saved'); } catch (er) { toast(er.message, true); } });
     $('[data-inv]')?.addEventListener('click', async () => { try { await api('POST', `/api/matches/${id}/members`, { email: $('#inv').value, score: $('#ps').checked, broadcast: $('#pb').checked }); toast('Invited'); await refresh(); } catch (e) { toast(e.message, true); } });
   }
 
-  await refresh(); timer = setInterval(() => { if (!busy && !$('.veil') && document.activeElement?.tagName !== 'INPUT') refresh(true); }, 2500); ctx.cleanup = () => clearInterval(timer);
+  await refresh(); const rtS = subscribe(M?.rt, () => { if (!busy && !$('.veil') && document.activeElement?.tagName !== 'INPUT') refresh(true); });
+  let tk = 0; timer = setInterval(() => { tk++; if (!busy && !$('.veil') && document.activeElement?.tagName !== 'INPUT' && (!rtS.connected() || tk % 4 === 0)) refresh(true); }, 2000); ctx.cleanup = () => { clearInterval(timer); rtS.close(); };
 }

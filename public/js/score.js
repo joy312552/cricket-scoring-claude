@@ -1,6 +1,8 @@
 import { $, $$, api, toast, esc, modal, confirmBox, ballChip, qGet, qPut, download } from './core.js';
 import { dispatch, RuleError } from './engine.js';
 import { buildVM } from './vm.js';
+import { subscribe } from './rt.js';
+import { openSummary } from './summary-ui.js';
 
 const KIND = [['bowled', 'Bowled'], ['caught', 'Caught'], ['caughtAndBowled', 'Caught & bowled'], ['lbw', 'LBW'], ['runOut', 'Run out'], ['stumped', 'Stumped'], ['hitWicket', 'Hit wicket'], ['obstructing', 'Obstructing'], ['hitBallTwice', 'Hit ball twice']];
 const ALLOW = { freehit: ['runOut', 'hitBallTwice', 'obstructing'], wide: ['runOut', 'stumped', 'hitWicket', 'obstructing'], noball: ['runOut', 'hitBallTwice', 'obstructing'] };
@@ -39,16 +41,17 @@ export async function renderScore(root, id, ctx) {
     if (busy) return;
     if (!editing && (queue.length || sync === 'bad')) return enqueue(cmd);
     busy = true; sync = 'busy'; paintSync();
+    if (!editing) { try { localApply(cmd); draw(); } catch {} } // instant feedback; the server answer replaces it
     try {
       if (editing) { await api('POST', `/api/matches/${id}/edit`, { cmd }); editing = false; toast('Last ball corrected'); }
-      else { const r = await api('POST', `/api/matches/${id}/cmd`, { command_id: opts.command_id || crypto.randomUUID(), cmd, takeover: opts.takeover }); if (r.dup) toast('Already recorded'); }
+      else { const r = await api('POST', `/api/matches/${id}/cmd`, { command_id: opts.command_id || crypto.randomUUID(), cmd, takeover: opts.takeover }); if (r.dup) toast('Already recorded'); if (r.view) { M = r.view; sync = 'ok'; navigator.vibrate?.(14); busy = false; draw(); return; } }
       navigator.vibrate?.(14); busy = false; await refresh();
     } catch (e) {
       busy = false;
       if (e.offline && !editing) { sync = 'bad'; return enqueue(cmd, opts.command_id); }
       if (e.code === 'LEASE' && await confirmBox(e.message)) return send(cmd, { takeover: true });
       if (e.code === 'NEED_BOWLER') { await refresh(); return openBowler(); }
-      sync = e.offline ? 'bad' : 'ok'; toast(e.message, true); paintSync();
+      sync = e.offline ? 'bad' : 'ok'; toast(e.message, true); paintSync(); if (!e.offline) refresh(); // drop the optimistic change
     }
   }
   const paintSync = () => { const s = $('.sync'); if (s) { s.className = 'sync ' + sync; s.textContent = queue.length ? `Queued ${queue.length}` : sync === 'ok' ? 'Online' : sync === 'busy' ? 'Syncing' : 'Offline'; } };
@@ -137,7 +140,7 @@ export async function renderScore(root, id, ctx) {
     con().innerHTML = `
      <div class="sc-top"><a class="mono" href="#/live">&larr; Matches</a><b style="font:800 22px var(--f-d)">${esc(d.name)}</b><span class="tag ${live ? 'live' : d.status === 'complete' ? 'ok' : 'lime'}">${d.status === 'break' ? 'Innings break' : d.status}</span>
       <span class="sync ${queue.length ? 'busy' : sync}">${queue.length ? `Queued ${queue.length}` : sync === 'ok' ? 'Online' : sync === 'busy' ? 'Syncing' : 'Offline'}</span><div style="flex:1"></div>
-      <a class="btn sm ghost" href="#/match/${id}/broadcast">Broadcast studio</a>${d.public ? `<a class="btn sm ghost" target="_blank" href="/m/${id}">Public page</a>` : ''}<button class="btn sm ghost" data-exp>Export CSV</button><button class="btn sm ghost" data-fin>Finish</button></div>
+      <a class="btn sm ghost" href="#/match/${id}/broadcast">Broadcast studio</a>${d.public ? `<a class="btn sm ghost" target="_blank" href="/m/?id=${id}">Public page</a>` : ''}<button class="btn sm ghost" data-simg>Summary picture</button><button class="btn sm ghost" data-exp>Export CSV</button><button class="btn sm ghost" data-fin>Finish</button></div>
      ${queue.length ? `<div class="banner-s">${conflict ? `Sync stopped: ${esc(conflict)}.` : `${queue.length} entr${queue.length === 1 ? 'y is' : 'ies are'} saved on this device and will sync when you are back online.`} <button class="btn sm" data-retry>Retry</button> <button class="btn sm red" data-discard>Discard queued</button></div>` : ''}
      ${editing ? `<div class="banner-s">Editing the last ball. The next delivery you record replaces it. <button class="btn sm ghost" data-ce>Cancel</button></div>` : ''}
      ${d.status === 'break' ? `<div class="panel" style="margin-bottom:14px"><h3>${d.innings.length >= 2 ? 'Super Over' : 'Innings break'}</h3><p>${esc(vm.cards[d.innings.length - 1].teamName)} scored <b>${vm.cards[d.innings.length - 1].runs}/${vm.cards[d.innings.length - 1].wkts}</b> in ${vm.cards[d.innings.length - 1].overs} overs.</p><div class="actions"><button class="btn" data-i2>${d.innings.length >= 2 ? 'Start Super Over innings' : 'Start 2nd innings'}</button><button class="btn ghost" data-undo>Undo last ball</button></div></div>` : ''}
@@ -166,6 +169,7 @@ export async function renderScore(root, id, ctx) {
     $$('[data-bowler]', c).forEach(b => b.onclick = openBowler); $('[data-ret]', c)?.addEventListener('click', openRetire); $('[data-i2]', c)?.addEventListener('click', startInnings2); $('[data-fin]', c)?.addEventListener('click', finishMenu);
     $('[data-dead]', c)?.addEventListener('click', () => send({ t: 'dead' })); $('[data-rev]', c)?.addEventListener('click', openRevise);
     $('[data-so]', c)?.addEventListener('click', async () => { try { await api('POST', `/api/matches/${id}/superover`); await refresh(); } catch (e) { toast(e.message, true); } });
+    $('[data-simg]', c)?.addEventListener('click', () => openSummary(M.vm, `${location.origin}/m/?id=${id}`));
     $('[data-exp]', c)?.addEventListener('click', () => download(`/api/matches/${id}/export?format=csv`, `${id}.csv`).catch(e => toast(e.message, true)));
     $('[data-retry]', c)?.addEventListener('click', () => { conflict = ''; flush(); });
     $('[data-discard]', c)?.addEventListener('click', async () => { if (!await confirmBox('Delete the entries that have not synced? The server scorecard will be shown instead.')) return; queue = []; conflict = ''; await qPut(id, []); await refresh(); });
@@ -175,5 +179,7 @@ export async function renderScore(root, id, ctx) {
   queue = await qGet(id); await refresh(); if (queue.length && M) { for (const it of queue) { try { localApply(it.cmd); } catch {} } draw(); flush(); }
   addEventListener('online', () => { sync = 'busy'; flush(); });
   if (M && M.doc.status === 'live' && st().bowler === null && st().legalBalls === 0) openBowler();
-  timer = setInterval(() => { if (!busy && !$('.veil')) { if (queue.length) flush(); else refresh(true); } }, 2500); ctx.cleanup = () => clearInterval(timer);
+  const rtS = subscribe(M?.rt, () => { if (!busy && !$('.veil') && !queue.length) refresh(true); });
+  let tk = 0; timer = setInterval(() => { tk++; if (!busy && !$('.veil')) { if (queue.length) flush(); else if (!rtS.connected() || tk % 4 === 0) refresh(true); } }, 2000);
+  ctx.cleanup = () => { clearInterval(timer); rtS.close(); };
 }
