@@ -37,11 +37,17 @@ test('full workflow: register -> teams -> match -> score -> undo -> broadcast ->
   const bad = await call('POST', `/api/matches/${id}/cmd`, { command_id: 'x1', cmd: { t: 'ball', runsBat: 0, wicket: { kind: 'bowled' } } }); assert.equal(bad.status, 422);
   await cmd({ t: 'ball', runsBat: 0, wicket: { kind: 'bowled', incoming: pa[2] } });
   assert.equal((await ok('GET', `/api/overlay/${tok}`)).events.at(-1).fx, 'wicket');
-  // broadcast preview/program separation + persistence
-  await ok('POST', `/api/broadcast/${id}`, { action: 'stage', graphic: 'bowling' });
-  await ok('POST', `/api/broadcast/${id}`, { action: 'show', graphic: 'batting' });
-  ov = await ok('GET', `/api/overlay/${tok}`); assert.equal(ov.program.graphic, 'batting'); assert.equal(ov.preview.graphic, 'bowling');
-  await ok('POST', `/api/broadcast/${id}`, { action: 'take' }); assert.equal((await ok('GET', `/api/overlay/${tok}`)).program.graphic, 'bowling');
+  // broadcast: three independent slots, click = on air immediately, click again = off
+  let r = await ok('POST', `/api/broadcast/${id}`, { action: 'toggle', graphic: 'timeline' }); assert.equal(r.on, true);
+  await ok('POST', `/api/broadcast/${id}`, { action: 'toggle', graphic: 'batterCard' });
+  await ok('POST', `/api/broadcast/${id}`, { action: 'toggle', graphic: 'batting' });
+  ov = await ok('GET', `/api/overlay/${tok}`); assert.equal(ov.slots.inline.g, 'timeline'); assert.equal(ov.slots.lower.g, 'batterCard'); assert.equal(ov.slots.full.g, 'batting');
+  await ok('POST', `/api/broadcast/${id}`, { action: 'toggle', graphic: 'projected' }); // replaces only the inline slot
+  ov = await ok('GET', `/api/overlay/${tok}`); assert.equal(ov.slots.inline.g, 'projected'); assert.equal(ov.slots.lower.g, 'batterCard');
+  r = await ok('POST', `/api/broadcast/${id}`, { action: 'toggle', graphic: 'projected' }); assert.equal(r.on, false); assert.equal(r.view.doc.slots.inline, null);
+  await ok('POST', `/api/broadcast/${id}`, { action: 'clear' }); ov = await ok('GET', `/api/overlay/${tok}`); assert.equal(ov.slots.full, null); assert.equal(ov.slots.lower, null);
+  assert.equal((await call('POST', `/api/broadcast/${id}`, { action: 'toggle', graphic: 'nope' })).status, 422);
+  await ok('POST', `/api/broadcast/${id}`, { action: 'settings', patch: { custom: { left: 'Crease Cup', right: 'Mymensingh' }, theme: 'mohua' } }); ov = await ok('GET', `/api/overlay/${tok}`); assert.equal(ov.settings.custom.right, 'Mymensingh'); assert.equal(ov.settings.theme, 'mohua');
   // approve mode holds celebrations
   await ok('POST', `/api/broadcast/${id}`, { action: 'settings', patch: { mode: 'approve' } });
   await cmd({ t: 'ball', runsBat: 6 }); ov = await ok('GET', `/api/overlay/${tok}`); assert.equal(ov.pending, 1);
@@ -67,8 +73,9 @@ test('full workflow: register -> teams -> match -> score -> undo -> broadcast ->
   }
   assert.ok(panel('arena', 'result', pv).includes('won by'));
   assert.ok(panel('mohua', 'compareBar', pv).includes('<svg') && panel('mohua', 'compareLine', pv).includes('polyline'));
-  assert.ok(panel('mohua', 'result', pv).includes('mh-venue') && panel('mohua', 'projected', pv).length > 20);
-  assert.ok(ticker('mohua', pv).includes('mh-tick'));
+  assert.ok(panel('mohua', 'projected', pv).includes('x-kv') && panel('mohua', 'target', pv).includes('TO WIN'));
+  assert.ok(ticker('mohua', pv).includes('sb th-mohua') && ticker('arena', pv).includes('class="sb-c"'));
+  const lt = panel('pulse', 'batterCard', pv); assert.ok(lt.includes('class="lt ') && !lt.includes('sb-c'));
   assert.ok(panel('pulse', 'points', pv).includes('MYK'));
   const t = await ok('GET', `/api/public/tournaments/${tr.id}`); assert.equal(t.table[0].team, 'MYK'); assert.equal(t.table[0].pts, 2);
   // security: no cookie => cannot read private data / score; revoked token dies

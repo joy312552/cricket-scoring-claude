@@ -2,7 +2,7 @@ import { $, $$, api, toast, esc, copy, modal, ballChip, download } from './core.
 import { qrSvg } from './qr.js';
 import { subscribe } from './rt.js';
 import { openSummary } from './summary-ui.js';
-import { GRAPHIC_LIST, FX_LIST } from './themes.js';
+import { GROUPS, FX_LIST, slotOf } from './themes.js';
 
 export async function renderBroadcast(root, id, ctx) {
   ctx.shell('/studio', '<div id="bc"><div class="panel"><div class="skel blk"></div></div></div>');
@@ -22,30 +22,42 @@ export async function renderBroadcast(root, id, ctx) {
     ({ studio, fx, sponsors, links })[tab]();
   }
 
-  // ---------- control room ----------
+  // ---------- control room: click a switch and it goes on air immediately ----------
+  const aliveSlot = (s) => s && s.g && (!s.until || s.until > Date.now());
+  const isOn = (g, params) => { const sl = (M.doc.slots || {})[slotOf(g)]; return aliveSlot(sl) && sl.g === g && (g !== 'sponsor' || (sl.params?.i || 0) === (params?.i || 0)); };
+  const row = (g, label, params) => `<button class="sw2 ${isOn(g, params) ? 'on' : ''}" data-t="${g}" ${params ? `data-i="${params.i}"` : ''} aria-pressed="${isOn(g, params)}"><span class="trk"></span><span>${esc(label)}</span><em>ON AIR</em></button>`;
+  async function toggle(g, params) {
+    const slot = slotOf(g); M.doc.slots ||= {}; const cur = M.doc.slots[slot], on = isOn(g, params);
+    M.doc.slots[slot] = on ? null : { g, params: params || {}, id: (cur?.id || 0) + 1, until: duration ? Date.now() + duration * 1000 : 0 }; paint(); // instant feedback
+    try { const r = await api('POST', `/api/broadcast/${id}`, { action: 'toggle', graphic: g, params, duration }); if (r.view) { M = r.view; paint(); } } catch (e) { toast(e.message, true); await refresh(); }
+  }
   function studio() {
-    const d = M.doc, vm = M.vm, pg = d.program, pv = d.preview, tb = $('#tabbody');
+    const d = M.doc, vm = M.vm, tb = $('#tabbody'), st = d.settings || {}, tk = st.ticker !== false, s = vm.score || {};
     if (!$('#mons')) {
-      tb.innerHTML = `<div class="bc"><div class="panel glist" id="gl"></div><div class="center"><div class="monpair" id="mons"><div class="mon pv"><span class="lab">PREVIEW</span><iframe id="ifp" src="/o/?t=${M.links.token}&p=all&mode=preview&bg=checker" title="preview"></iframe></div><div class="mon pg"><span class="lab">ON AIR</span><iframe id="ifg" src="/o/?t=${M.links.token}&p=all&bg=checker" title="program"></iframe></div></div><div class="panel" style="margin-top:12px" id="strip"></div></div><div class="panel" id="rt"></div></div>`;
+      tb.innerHTML = `<div class="bc2"><div><div id="mons"><div class="mon pg"><span class="lab">ON AIR</span><iframe id="ifg" src="/o/?t=${M.links.token}&p=all&bg=checker" title="on air"></iframe></div></div><div class="panel" style="margin-top:12px" id="strip"></div><div class="panel" style="margin-top:12px" id="fxp"></div></div><div id="ctl"></div></div>`;
       const fit = () => $$('.mon').forEach(m => { const f = m.querySelector('iframe'); f.style.transform = `scale(${m.clientWidth / 1920})`; }); new ResizeObserver(fit).observe($('#mons')); fit();
     }
-    $('#gl').innerHTML = `<h3>Graphics</h3>` + GRAPHIC_LIST.map(([cat, items]) => `<h4>${cat}</h4>` + items.map(([k, l]) => `<button class="${pv?.graphic === k ? 'stg' : ''} ${pg.graphic === k ? 'air' : ''}" data-g="${k}"><span>${l}</span><span class="mono">${pg.graphic === k ? 'ON AIR' : pv?.graphic === k ? 'STAGED' : ''}</span></button>`).join('')).join('');
-    $$('[data-g]').forEach(b => b.onclick = () => act({ action: 'stage', graphic: b.dataset.g }));
-    const s = vm.score || {};
-    $('#strip').innerHTML = `<div class="grid g4"><div><span class="mono">Score</span><div style="font:800 34px var(--f-d)">${esc(vm.bat ? vm.teams[vm.bat].short : '-')} ${s.runs ?? 0}/${s.wkts ?? 0}</div></div><div><span class="mono">Overs</span><div style="font:800 34px var(--f-d)">${esc(s.overs ?? '0.0')}</div></div><div><span class="mono">On air</span><div style="font:800 24px var(--f-d);color:var(--red)">${pg.graphic ? esc(pg.graphic).toUpperCase() : 'SCOREBOARD ONLY'}</div></div><div><span class="mono">Staged</span><div style="font:800 24px var(--f-d);color:var(--org)">${esc(pv?.graphic || '-').toUpperCase()}</div></div></div>
-      <div class="over" style="margin-top:10px">${vm.lastSix.map(ballChip).join('')}</div>`;
-    const st = d.settings;
-    $('#rt').innerHTML = `<button class="btn red takebtn" data-take>TAKE TO AIR</button><div class="rowb"><button class="btn ghost" data-hide>Hide graphic</button><button class="btn ghost" data-clear>Clear all</button><button class="btn ghost" data-replay>Replay last</button><button class="btn ghost" data-tick>${st.ticker ? 'Hide' : 'Show'} scoreboard</button></div>
-      <h4 class="mono" style="margin:18px 0 6px">Auto-hide after</h4><div class="chips">${[[0, 'Manual'], [6, '6 s'], [10, '10 s'], [15, '15 s']].map(([v, l]) => `<span class="chip ${duration === v ? 'on' : ''}" data-dur="${v}">${l}</span>`).join('')}</div>
-      <h4 class="mono" style="margin:18px 0 6px">Scoreboard position</h4><div class="chips">${['bottom', 'top'].map(v => `<span class="chip ${st.position === v ? 'on' : ''}" data-pos="${v}">${v}</span>`).join('')}</div>
-      <h4 class="mono" style="margin:18px 0 6px">Theme</h4><div class="chips">${['arena', 'pulse', 'mohua'].map(v => `<span class="chip ${st.theme === v ? 'on' : ''}" data-th="${v}">${v.toUpperCase()}</span>`).join('')}</div>
-      <h4 class="mono" style="margin:18px 0 6px">Trigger celebration (on air)</h4><div class="chips">${['four', 'six', 'wicket'].map(v => `<span class="chip" data-fx="${v}">${v.toUpperCase()}</span>`).join('')}</div>
-      <h4 class="mono" style="margin:18px 0 6px">Test in preview only</h4><div class="chips">${FX_LIST.slice(0, 6).map(([v, l]) => `<span class="chip" data-test="${v}">${l}</span>`).join('')}</div>
-      ${d.pending.length ? `<h4 class="mono" style="margin:18px 0 6px;color:var(--org)">Waiting for approval</h4>${d.pending.map(e => `<div class="ev"><b>${esc(e.fx.toUpperCase())}</b><span style="flex:1">${esc(e.payload.batterName || e.payload.bowlerName || '')}</span><button class="btn sm" data-ap="${e.seq}">Show</button><button class="btn sm ghost" data-dm="${e.seq}">x</button></div>`).join('')}` : ''}`;
-    $('[data-take]').onclick = () => act({ action: 'take', duration }, 'Graphic is on air'); $('[data-hide]').onclick = () => act({ action: 'hide' }); $('[data-clear]').onclick = () => act({ action: 'clear' }, 'Cleared');
-    $('[data-replay]').onclick = () => act({ action: 'replay' }, 'Replaying'); $('[data-tick]').onclick = () => act({ action: 'ticker', on: !st.ticker });
+    const live = ['inline', 'lower', 'full'].map(k => (d.slots || {})[k]).filter(aliveSlot).map(x => x.g);
+    $('#strip').innerHTML = `<div class="grid g4"><div><span class="mono">Score</span><div style="font:800 34px var(--f-d)">${esc(vm.bat ? vm.teams[vm.bat].short : '-')} ${s.runs ?? 0}/${s.wkts ?? 0}</div></div><div><span class="mono">Overs</span><div style="font:800 34px var(--f-d)">${esc(s.overs ?? '0.0')}</div></div><div style="grid-column:span 2"><span class="mono">On air now</span><div style="font:800 24px var(--f-d);color:var(--red)">${[tk ? 'SCOREBOARD' : '', ...live.map(x => x.toUpperCase())].filter(Boolean).join('  +  ') || 'NOTHING'}</div></div></div><div class="over" style="margin-top:10px">${vm.lastSix.map(ballChip).join('')}</div>`;
+    $('#fxp').innerHTML = `<h4 class="mono">Celebrations (plays inside the scoreboard)</h4><div class="fxrow">${['four', 'six', 'wicket', 'noball', 'fifty', 'century'].map(v => `<button class="btn ${v === 'wicket' ? 'red' : v === 'six' ? '' : 'chalk'}" data-fx="${v}">${v === 'century' ? 'HUNDRED' : v === 'noball' ? 'NO BALL' : v.toUpperCase()}</button>`).join('')}</div><div class="actions" style="margin-top:10px"><button class="btn sm ghost" data-replay>Replay last</button><button class="btn sm ghost" data-clear>Clear everything</button></div>
+      ${(d.pending || []).length ? `<h4 class="mono" style="margin:14px 0 6px;color:var(--org)">Waiting for approval</h4>${d.pending.map(e => `<div class="ev"><b>${esc(e.fx.toUpperCase())}</b><span style="flex:1">${esc(e.payload.batterName || e.payload.bowlerName || '')}</span><button class="btn sm" data-ap="${e.seq}">Show</button><button class="btn sm ghost" data-dm="${e.seq}">x</button></div>`).join('')}` : ''}`;
+    const sponsors = d.sponsors || [], cu = st.custom || {};
+    $('#ctl').innerHTML = `<div class="panel">
+      <button class="sw2 master ${tk ? 'on' : ''}" data-tick aria-pressed="${tk}"><span class="trk"></span><span style="font:800 22px var(--f-d);letter-spacing:.05em">MAIN SCOREBOARD</span><em>${tk ? 'ON AIR' : ''}</em></button>
+      <div class="grp" style="margin-top:14px"><h4>${GROUPS[0].title} <small>${GROUPS[0].note}</small></h4><div class="swgrid">${GROUPS[0].items.map(([k, l]) => row(k, l)).join('')}</div>
+        <div class="grid g2" style="margin-top:6px"><label class="f"><span>Custom text 1 (e.g. tournament)</span><input id="cu1" value="${esc(cu.left || '')}" placeholder="${esc(vm.match.tournament || 'Tournament name')}"></label><label class="f"><span>Custom text 2 (e.g. location)</span><input id="cu2" value="${esc(cu.right || '')}" placeholder="${esc(vm.match.venue || 'Venue')}"></label></div><button class="btn sm ghost" style="margin-top:8px" data-cusave>Save custom text</button></div>
+      <div class="grp"><h4>${GROUPS[1].title} <small>${GROUPS[1].note}</small></h4><div class="swgrid">${GROUPS[1].items.map(([k, l]) => row(k, l)).join('')}${sponsors.map((sp, i) => row('sponsor', 'Sponsor: ' + sp.name, { i })).join('')}</div>${sponsors.length ? '' : '<p class="mono" style="margin:4px 0 0">Add sponsors in the Sponsors tab to show them here.</p>'}</div>
+      <div class="grp"><h4>${GROUPS[2].title} <small>${GROUPS[2].note}</small></h4><div class="swgrid">${GROUPS[2].items.map(([k, l]) => row(k, l)).join('')}</div></div>
+      <div class="grp"><h4>Options</h4><h4 class="mono" style="margin:8px 0 6px">Auto-hide timed graphics after</h4><div class="chips">${[[0, 'Manual'], [6, '6 s'], [10, '10 s'], [15, '15 s']].map(([v, l]) => `<span class="chip ${duration === v ? 'on' : ''}" data-dur="${v}">${l}</span>`).join('')}</div>
+        <h4 class="mono" style="margin:12px 0 6px">Scoreboard position</h4><div class="chips">${['bottom', 'top'].map(v => `<span class="chip ${st.position === v ? 'on' : ''}" data-pos="${v}">${v}</span>`).join('')}</div>
+        <h4 class="mono" style="margin:12px 0 6px">Theme</h4><div class="chips">${['arena', 'pulse', 'mohua'].map(v => `<span class="chip ${st.theme === v ? 'on' : ''}" data-th="${v}">${v.toUpperCase()}</span>`).join('')}</div>
+        <button class="sw2 ${st.sound ? 'on' : ''}" style="margin-top:12px" data-snd><span class="trk"></span><span>Transition and celebration sounds</span><em>ON</em></button></div></div>`;
+    $$('[data-t]').forEach(b => b.onclick = () => toggle(b.dataset.t, b.dataset.i !== undefined ? { i: +b.dataset.i } : undefined));
+    $('[data-tick]').onclick = () => { M.doc.settings.ticker = !tk; paint(); act({ action: 'ticker', on: !tk }); };
+    $('[data-cusave]').onclick = () => act({ action: 'settings', patch: { custom: { left: $('#cu1').value, right: $('#cu2').value } } }, 'Saved');
     $$('[data-dur]').forEach(c => c.onclick = () => { duration = +c.dataset.dur; paint(); }); $$('[data-pos]').forEach(c => c.onclick = () => act({ action: 'settings', patch: { position: c.dataset.pos } })); $$('[data-th]').forEach(c => c.onclick = () => act({ action: 'settings', patch: { theme: c.dataset.th } }));
-    $$('[data-fx]').forEach(c => c.onclick = () => act({ action: 'fx', fx: c.dataset.fx })); $$('[data-test]').forEach(c => c.onclick = () => $('#ifp')?.contentWindow.postMessage({ type: 'play', fx: c.dataset.test }, location.origin));
+    $('[data-snd]').onclick = () => act({ action: 'settings', patch: { sound: !st.sound } });
+    $$('[data-fx]').forEach(c => c.onclick = () => act({ action: 'fx', fx: c.dataset.fx })); $('[data-replay]').onclick = () => act({ action: 'replay' }, 'Replaying'); $('[data-clear]').onclick = () => act({ action: 'clear' }, 'Cleared');
     $$('[data-ap]').forEach(c => c.onclick = () => act({ action: 'approve', seq: +c.dataset.ap })); $$('[data-dm]').forEach(c => c.onclick = () => act({ action: 'dismiss', seq: +c.dataset.dm }));
   }
 
@@ -75,7 +87,7 @@ export async function renderBroadcast(root, id, ctx) {
 
   // ---------- links ----------
   function links() {
-    const L = [['all', 'Everything (recommended)', 'One browser source: scoreboard + graphics + celebrations, controlled from this room'], ['scoreboard', 'Main scoreboard'], ['celebrations', 'Celebrations only'], ['batting', 'Batting scorecard'], ['bowling', 'Bowling scorecard'], ['over', 'Current over'], ['partnership', 'Partnership'], ['lineupA', 'Playing XI: Team A'], ['lineupB', 'Playing XI: Team B'], ['matchinfo', 'Match information'], ['summary', 'Match summary'], ['points', 'Points table'], ['sponsor', 'Sponsor panel']];
+    const L = [['all', 'Everything (recommended)', 'One browser source: scoreboard + graphics + celebrations, controlled from this room'], ['scoreboard', 'Main scoreboard only'], ['celebrations', 'Celebrations only'], ['batting', 'Batting scorecard'], ['bowling', 'Bowling scorecard'], ['lineups', 'Both playing XIs'], ['points', 'Points table'], ['result', 'Match result'], ['summary', 'Match summary'], ['batterCard', 'Batter card'], ['bowlerCard', 'Bowler card'], ['potm', 'Player of the Match'], ['sponsor', 'Sponsor strip']];
     const d = M.doc;
     $('#tabbody').innerHTML = `<div class="grid g2"><div class="panel"><h3>Overlay URLs</h3><p style="color:var(--dim);font-size:14px">Add as a Browser Source in OBS, vMix, PRISM, Streamlabs or Wirecast. Width 1920, height 1080. Transparent background is automatic. Treat these links like passwords.</p>
       ${L.map(([k, l]) => `<div class="linkrow"><span>${l}</span><code>${esc(url(k))}</code><button class="btn sm ghost" data-cp="${esc(url(k))}">Copy</button></div>`).join('')}

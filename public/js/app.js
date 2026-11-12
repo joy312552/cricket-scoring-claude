@@ -151,7 +151,7 @@ async function pickMatch(path, title, verb, to, filter) {
 }
 async function overlaysView() {
   shell('/overlays', head('Overlay themes') + `<p style="color:var(--dim);max-width:720px">Every match gets its own secret browser-source link. Open a match in the Broadcast studio to copy URLs and switch theme. Below: both themes rendering a live sample.</p><div class="grid g2"><div><div id="ov1"></div><h3 style="margin-top:10px">ARENA</h3><span class="mono">Premium international broadcast</span></div><div><div id="ov2"></div><h3 style="margin-top:10px">PULSE</h3><span class="mono">Modern dynamic sports tech</span></div><div><div id="ov3"></div><h3 style="margin-top:10px">MOHUA</h3><span class="mono">Royal purple, cyan and gold</span></div></div>`);
-  const vm = sampleVM(); [['#ov1', 'arena'], ['#ov2', 'pulse'], ['#ov3', 'mohua']].forEach(([s, t]) => { const st = mountStage($(s), t); st.ticker(vm); st.graphic('batting', vm); });
+  const vm = sampleVM(); [['#ov1', 'arena'], ['#ov2', 'pulse'], ['#ov3', 'mohua']].forEach(([s, t]) => { const st = mountStage($(s), t); st.ticker(vm); st.graphic('projected', vm); });
 }
 async function statsView() {
   shell('/stats', head('Statistics') + sk(2)); const s = await api('GET', '/api/stats').catch(e => (toast(e.message, true), null)); if (!s) return;

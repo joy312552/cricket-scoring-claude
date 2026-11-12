@@ -67,6 +67,16 @@ Without `SUPABASE_ANON_KEY` everything still works using fast polling (about 1 s
 
 Share links use the form `/m/?id=MATCH_ID`, `/t/?id=TOURNAMENT_ID`, `/o/?t=TOKEN&p=all` (they work without any URL rewriting). Old path-style links still work when rewrites are active.
 
+## Control room (v2)
+
+- Click any switch and it goes on air immediately. Click again and it leaves with a transition. There is no preview or take-to-air step.
+- **Main scoreboard** is one bar at the bottom: batters on the left, score and overs in the centre (CRR, projected score, target under it), bowler on the right.
+- **Scoreboard sections** (timeline, projected score, target, partnership, match preview, toss, custom text) replace the batting/bowling area inside that bar.
+- **Lower thirds** (batter card, bowler card, officials, drinks, rain, resumption, Player of the Match, champions, sponsors, QR) appear in a strip above the bar so the game stays visible.
+- **Full panels** (scorecards, XIs, points table, charts, result, summary) use the centre of the screen.
+- FOUR, SIX, WICKET, NO BALL and other celebrations play inside the scoreboard bar, not full screen.
+- Transition sounds (whoosh and tone) play on show/hide. In OBS tick "Control audio via OBS" on the browser source to hear and mix them.
+
 ## Themes
 
 ARENA (navy and gold), PULSE (graphite and lime), MOHUA (royal purple, cyan and gold, from the supplied design JSON). New graphics: timeline, projected score, over comparison bars, run progression line, both playing XIs.

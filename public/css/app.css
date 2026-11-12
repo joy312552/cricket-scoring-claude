@@ -41,3 +41,13 @@ main.main{padding:28px;min-width:0}.ph{display:flex;align-items:flex-end;gap:16p
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px;overflow:auto}.tabs button{background:none;border:0;padding:10px 16px;font:800 18px var(--f-d);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}.tabs button.on{color:var(--lime);border-bottom-color:var(--lime)}
 .sw{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:14px}
 .ev{padding:8px 10px;background:var(--bg);border:1px solid var(--line);display:flex;gap:8px;align-items:center;margin-bottom:6px;font-size:14px}
+/* ===== broadcast control room v2: switches ===== */
+.bc2{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(380px,.9fr);gap:14px;align-items:start}@media(max-width:1100px){.bc2{grid-template-columns:1fr}}
+.sw2{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--bg);border:1px solid var(--line);padding:9px 12px;margin-bottom:6px;cursor:pointer;font-weight:600;transition:border-color .15s,background .2s}
+.sw2:hover{border-color:#44564b}.sw2 .trk{width:46px;height:26px;border-radius:13px;background:#2a3530;position:relative;flex:none;transition:background .2s}.sw2 .trk:after{content:'';position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#9aa89f;transition:transform .22s cubic-bezier(.3,1.4,.5,1),background .2s}
+.sw2.on{border-color:var(--red);background:#2a1110}.sw2.on .trk{background:var(--red)}.sw2.on .trk:after{transform:translateX(20px);background:#fff}
+.sw2 em{margin-left:auto;font:600 10px var(--f-m);letter-spacing:.16em;color:var(--red);opacity:0;transition:opacity .2s}.sw2.on em{opacity:1;animation:blink 1.4s infinite}
+.sw2.master{border-color:var(--lime);padding:14px 14px}.sw2.master.on{border-color:var(--lime);background:#14210f}.sw2.master.on .trk{background:var(--lime)}.sw2.master.on .trk:after{background:#0b0f0c}.sw2.master em{color:var(--lime)}
+.grp{margin-bottom:16px}.grp h4{font:800 22px var(--f-d);letter-spacing:.04em;margin:0 0 2px;display:flex;gap:10px;align-items:baseline}.grp h4 small{font:500 10px var(--f-m);letter-spacing:.1em;color:var(--dim);text-transform:uppercase}
+.swgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 8px;margin-top:8px}@media(max-width:560px){.swgrid{grid-template-columns:1fr}}
+.fxrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.fxrow .btn{justify-content:center;padding:14px 8px;font-size:22px}
