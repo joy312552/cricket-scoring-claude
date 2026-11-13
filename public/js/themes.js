@@ -6,9 +6,9 @@ export const THEMES = { arena: { key: 'arena', name: 'ARENA', tag: 'Premium inte
 //  lower  = compact lower-third strip above the scoreboard
 //  full   = large centre panels (scorecards, tables, charts)
 export const GROUPS = [
-  { slot: 'inline', title: 'Scoreboard sections', note: 'Swap the batting / bowling area inside the main scoreboard', items: [['timeline', 'Timeline'], ['projected', 'Projected score'], ['target', 'Target / chase'], ['partnership', 'Partnership'], ['preview', 'Match preview'], ['toss', 'Toss result'], ['custom', 'Custom text']] },
+  { slot: 'inline', title: 'Scoreboard sections', note: 'Swap the batting / bowling area inside the main scoreboard', items: [['timeline', 'Timeline'], ['projected', 'Projected score'], ['target', 'Target / chase'], ['partnership', 'Partnership'], ['preview', 'Match preview'], ['toss', 'Toss result'], ['resultBar', 'Match result'], ['custom', 'Custom text']] },
   { slot: 'lower', title: 'Lower thirds', note: 'Compact strips above the scoreboard', items: [['batterCard', 'Batter card'], ['bowlerCard', 'Bowler card'], ['officials', 'Match officials'], ['drinks', 'Drinks break'], ['rain', 'Rain delay'], ['resume', 'Match resumption'], ['potm', 'Player of the Match'], ['champion', 'Tournament champions'], ['qr', 'QR: follow live']] },
-  { slot: 'full', title: 'Full panels', note: 'Large panels in the centre of the screen', items: [['batting', 'Batting scorecard'], ['bowling', 'Bowling scorecard'], ['fow', 'Fall of wickets'], ['lineups', 'Both playing XIs'], ['lineupA', 'Playing XI: Team A'], ['lineupB', 'Playing XI: Team B'], ['inningsBreak', 'Innings break'], ['result', 'Match result'], ['summary', 'Match summary'], ['points', 'Points table'], ['compareBar', 'Over comparison (bars)'], ['compareLine', 'Run progression (line)']] },
+  { slot: 'full', title: 'Full panels', note: 'Large panels in the centre of the screen', items: [['batting', 'Batting scorecard'], ['bowling', 'Bowling scorecard'], ['fow', 'Fall of wickets'], ['lineups', 'Both playing XIs'], ['lineupA', 'Playing XI: Team A'], ['lineupB', 'Playing XI: Team B'], ['inningsBreak', 'Innings break'], ['result', 'Result panel (centre)'], ['summary', 'Match summary'], ['points', 'Points table'], ['compareBar', 'Over comparison (bars)'], ['compareLine', 'Run progression (line)']] },
 ];
 export const GRAPHIC_LIST = GROUPS.map(g => [g.title, g.items]).concat([['Sponsors', [['sponsor', 'Sponsor panel']]]]);
 const INLINE = new Set(GROUPS[0].items.map(x => x[0])), LOWER = new Set([...GROUPS[1].items.map(x => x[0]), 'sponsor']);
@@ -49,7 +49,8 @@ function inlineParts(vm, key, custom = {}) {
     case 'partnership': return { l: `<div class="x-pt"><small>PARTNERSHIP</small><b>${vm.partnership.runs}</b><span>(${vm.partnership.balls})</span><em>${esc(b[0]?.name || '')}${b[1] ? ' &amp; ' + esc(b[1].name) : ''}</em></div>`, sub: 'PARTNERSHIP' };
     case 'preview': return { l: `<div class="x-tm"><b>${esc(A.name)}</b></div>`, r: `<div class="x-tm"><b>${esc(B.name)}</b></div>`, sub: esc(vm.match.tournament || 'MATCH PREVIEW') };
     case 'toss': return { l: `<div class="x-tm"><b>${esc(vm.match.toss ? vm.match.toss.split(' won the toss')[0] : 'Toss')}</b><small>WON THE TOSS</small></div>`, r: `<div class="x-tm"><b>${esc(vm.match.toss ? (vm.match.toss.split('chose to ')[1] || '').toUpperCase() : '')}</b><small>FIRST</small></div>`, sub: 'TOSS RESULT' };
-    case 'custom': return { l: `<div class="x-tm"><b>${esc(custom.left || vm.match.tournament || vm.match.name)}</b></div>`, r: `<div class="x-tm"><b>${esc(custom.right || vm.match.venue || '')}</b></div>`, sub: '' };
+    case 'custom': return { r: `<div class="x-tm two"><b>${esc(custom.left || vm.match.tournament || vm.match.name)}</b><b>${esc(custom.right || vm.match.venue || '')}</b></div>`, sub: '' };
+    case 'resultBar': { const r = vm.result; return { l: `<div class="x-tm"><b>${esc(r ? r.text : 'MATCH IN PROGRESS')}</b></div>`, r: `<div class="x-tm two">${vm.cards.map(c => `<b>${esc(c.team)} ${c.runs}-${c.wkts} <small>(${esc(c.overs)})</small></b>`).join('')}</div>`, sub: r ? 'MATCH RESULT' : 'LIVE' }; }
     default: return {};
   }
 }
@@ -101,7 +102,11 @@ export function panel(theme, key, vm, params = {}) {
     case 'lineups': return `<section class="card g-lineups">${head('Playing XI', esc(m.tournament))}<div class="cb two"><div class="col sA"><h4>${esc(vm.teams.A.name)}</h4>${list(vm.xi.A)}</div><div class="col sB"><h4>${esc(vm.teams.B.name)}</h4>${list(vm.xi.B)}</div></div></section>`;
     case 'inningsBreak': { const f = vm.cards[0]; return f ? wrap(key, vm, 'Innings break', `<div class="ib"><div class="a">${crest(vm.teams[f.side], 120)}<b>${f.runs}/${f.wkts}</b><small>${esc(f.overs)} overs</small></div><div class="b"><small>TARGET</small><b>${f.runs + 1}</b><span>${esc(vm.teams[f.side === 'A' ? 'B' : 'A'].name)} need ${f.runs + 1} to win</span></div></div>`) : ''; }
     case 'result': { const r = vm.result; return banner('result', r ? r.text : 'Match in progress', 'RESULT').replace('</div></section>', `<div class="rs">${vm.cards.map(x => `<span>${esc(x.team)} <b>${x.runs}/${x.wkts}</b> (${x.overs})</span>`).join('')}</div></div></section>`); }
-    case 'summary': return vm.cards.length ? `<section class="card g-summary">${head('Match summary', esc(vm.result?.text || ''))}<div class="cb sm">${vm.cards.map(x => `<div><h4>${esc(x.teamName)} <b>${x.runs}/${x.wkts}</b> <small>${esc(x.overs)} ov</small></h4>${x.bat.slice().sort((a, b) => b.runs - a.runs).slice(0, 3).map(b => `<p><em>${esc(b.name)}</em><b>${b.runs}</b><small>(${b.balls})</small></p>`).join('')}<hr>${x.bowl.slice().sort((a, b) => b.w - a.w || a.r - b.r).slice(0, 3).map(b => `<p><em>${esc(b.name)}</em><b>${b.w}-${b.r}</b><small>(${b.o})</small></p>`).join('')}</div>`).join('')}</div></section>` : '';
+    case 'summary': { if (!vm.cards.length) return '';
+      const pad = (arr) => arr.concat(Array(Math.max(0, 3 - arr.length)).fill('<div class="rw e"><em></em><b></b><small></small></div>')).join('');
+      const blk = (c) => `<div class="sum-team s${c.side}"><strong>${esc(c.teamName)}</strong><span>OVERS ${esc(c.overs)}</span><b>${c.runs}-${c.wkts}</b></div><div class="sum-grid"><div>${pad(c.bat.slice().sort((a, b) => b.runs - a.runs).slice(0, 3).map(b => `<div class="rw"><em>${esc(b.name)}</em><b>${b.runs}${b.isOut ? '' : '*'}</b><small>${b.balls}</small></div>`))}</div><div>${pad(c.bowl.slice().sort((a, b) => b.w - a.w || a.r - b.r).slice(0, 3).map(b => `<div class="rw"><em>${esc(b.name)}</em><b>${b.w}-${b.r}</b><small>${esc(b.o)}</small></div>`))}</div></div>`;
+      const sides = vm.cards.length > 1 ? vm.cards.map(c => c.side) : ['A', 'B'];
+      return `<section class="card g-summary sum"><div class="sum-logos">${sides.map(sd => crest(vm.teams[sd], 190)).join('')}</div><div class="sum-main"><div class="sum-title">MATCH SUMMARY</div><div class="sum-sub">${esc(m.tournament || m.name)}${m.number ? ' | MATCH NO.' + esc(m.number) : ''}</div>${vm.cards.map(blk).join('')}<div class="sum-res">${esc(vm.result ? vm.result.text : 'MATCH IN PROGRESS')}</div></div></section>`; }
     case 'points': return vm.points ? wrap(key, vm, 'Points table', `<table><thead><tr><th class="l">TEAM</th><th>P</th><th>W</th><th>L</th><th>T</th><th>NRR</th><th>PTS</th></tr></thead><tbody>${vm.points.map((r, i) => `<tr><td class="l"><i>${i + 1}</i>${esc(r.team)}</td><td>${r.p}</td><td>${r.w}</td><td>${r.l}</td><td>${r.t}</td><td>${r.nrr > 0 ? '+' : ''}${r.nrr.toFixed(3)}</td><td class="n">${r.pts}</td></tr>`).join('')}</tbody></table>`, esc(m.tournament)) : wrap(key, vm, 'Points table', '<p class="mt">This match is not part of a tournament</p>');
     case 'compareBar': return wrap(key, vm, 'Over comparison', chart(vm, 'bar'));
     case 'compareLine': return wrap(key, vm, 'Run progression', chart(vm, 'line'));
@@ -126,17 +131,17 @@ function chart(vm, kind) {
   });
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${g}${d}</svg><div class="cmp">${cs.map(c => `<span class="s${c.side}">${esc(c.team)} <b>${c.runs}-${c.wkts}</b> <small>${esc(c.overs)} OVERS</small></span>`).join('')}</div>`;
 }
-// ================= CELEBRATIONS: play inside the scoreboard bar =================
+// ================= CELEBRATIONS: fill the whole scoreboard bar, just the event word =================
 export function fx(theme, kind, p, vm) {
-  if (kind === 'hattrick') p = { ...p, batterName: p.bowlerName, stat: null };
   const W = { four: 'FOUR', six: 'SIX', wicket: 'WICKET', fifty: 'FIFTY', century: 'HUNDRED', hattrick: 'HAT-TRICK', noball: 'NO BALL', wide: 'WIDE', maiden: 'MAIDEN OVER' }[kind]; if (!W) return '';
-  const t = T(vm), s = sc(vm), score = `${esc(p.team || t.short)} <b>${p.runs ?? s.runs}-${p.wickets ?? s.wkts}</b>`;
-  let mid;
-  if (kind === 'wicket') mid = `<b>${esc(p.batterName || 'OUT')}</b><small>${esc(dtext(p))}${p.stat ? `  &bull;  ${p.stat.runs} (${p.stat.balls})` : ''}</small>`;
-  else if (kind === 'noball') mid = '<b>FREE HIT NEXT BALL</b>';
-  else if (kind === 'wide') mid = '<b>EXTRA RUN</b>';
-  else if (kind === 'maiden') mid = `<b>${esc(p.bowlerName || '')}</b>`;
-  else mid = `<b>${esc(p.batterName || '')}</b>${p.stat ? `<small>${p.stat.runs} (${p.stat.balls})</small>` : ''}`;
-  const P = theme === 'pulse' ? 'pu' : theme === 'mohua' ? 'mh' : 'ar';
-  return `<div class="fx fxbar ${P}-fx fx-${kind}"><div class="fb-bg"></div><span class="fb-shine"></span><div class="fb-word">${W}</div><div class="fb-mid">${mid}</div><div class="fb-sc">${score}</div></div>`;
+  const P = theme === 'pulse' ? 'pu' : theme === 'mohua' ? 'mh' : 'ar', n = W.length, fs = n <= 3 ? 150 : n <= 5 ? 128 : n <= 7 ? 110 : n <= 9 ? 96 : 80;
+  const sparks = Array.from({ length: 22 }, (_, i) => `<s style="left:${(i * 47) % 100}%;top:${(i * 31) % 90}%;--d:${(i * 90) % 700}ms;--z:${0.6 + ((i * 13) % 10) / 10}"></s>`).join('');
+  const stump = '<svg viewBox="0 0 120 100"><rect x="18" y="26" width="10" height="70"/><rect x="55" y="26" width="10" height="70"/><rect x="92" y="26" width="10" height="70"/><rect class="b1" x="14" y="14" width="30" height="8"/><rect class="b2" x="76" y="14" width="30" height="8"/></svg>';
+  const deco = kind === 'four' ? '<div class="fb-deco chev"><i></i><i></i><i></i><i></i><i></i><i></i></div>'
+    : kind === 'six' ? `<div class="fb-deco sparks">${sparks}</div><span class="fb-ring"></span>`
+    : kind === 'wicket' ? `<div class="fb-deco stumps"><div class="l">${stump}</div><div class="r">${stump}</div></div>`
+    : kind === 'noball' ? '<div class="fb-deco stripes"><i></i><i></i></div>'
+    : `<div class="fb-deco sparks">${sparks}</div>`;
+  const ghost = `${W}   `.repeat(10);
+  return `<div class="fx fxbar ${P}-fx fx-${kind}"><div class="fb-bg"></div><div class="fb-ghost"><span>${ghost}</span></div>${deco}<span class="fb-shine"></span><div class="fb-word" style="font-size:${fs}px"><span>${W}</span></div></div>`;
 }

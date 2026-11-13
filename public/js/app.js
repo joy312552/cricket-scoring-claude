@@ -59,10 +59,17 @@ async function overview() {
    <div class="panel stat"><span class="mono">Tournaments</span><b>${d.tournaments.length}</b></div><div class="panel stat"><span class="mono">Teams</span><b>${d.teams.length}</b></div><div class="panel stat"><span class="mono">Players</span><b>${d.players.length}</b></div><div class="panel stat"><span class="mono">Sponsors</span><b>${d.sponsors.length}</b></div></div>
    <div class="actions" style="margin:18px 0"><a class="btn ghost" href="#/tournaments?new=1">Create tournament</a><a class="btn ghost" href="#/teams?new=1">Add team</a><a class="btn ghost" href="#/players?new=1">Add player</a>${ms.find(m => m.status === 'live') ? `<a class="btn" href="#/match/${ms.find(m => m.status === 'live').id}/score">Resume live scoring</a>` : ''}</div>
    <h2 style="font-size:30px;margin:26px 0 12px">Recent matches</h2><div class="grid">${matchCards(ms.slice(0, 6)) || '<div class="panel">No matches yet. Add two teams with players, then create a match.</div>'}</div>`);
+  wireDelete(overview);
+}
+function wireDelete(redraw) {
+  $$('[data-del]').forEach(b => b.onclick = async () => {
+    if (!await confirmBox('Delete this match permanently? Its scorecard and overlay links will be removed. This cannot be undone.')) return;
+    try { await api('DELETE', `/api/matches/${b.dataset.del}`); S.data.matches = S.data.matches.filter(m => m.id !== b.dataset.del); toast('Match deleted'); redraw(); } catch (e) { toast(e.message, true); }
+  });
 }
 function matchCards(ms) {
   return ms.map(m => `<div class="mcard ${m.status === 'live' ? 'live' : ''}"><div><h4>${esc(m.a)} vs ${esc(m.b)} ${statusTag(m.status)}</h4><div class="sc">${esc(m.name)} • ${fmtDate(m.date)}${m.score.length ? ' • ' + m.score.join(' | ') : ''}${m.result ? ' • ' + esc(m.result) : ''}</div></div>
-   <div class="actions">${m.status === 'setup' ? `<a class="btn sm" href="#/match/${m.id}/setup">Set up</a>` : `<a class="btn sm" href="#/match/${m.id}/score">Score</a>`}<a class="btn sm ghost" href="#/match/${m.id}/broadcast">Studio</a>${m.public ? `<a class="btn sm ghost" target="_blank" href="/m/?id=${m.id}">Public</a>` : ''}</div></div>`).join('');
+   <div class="actions">${m.status === 'setup' ? `<a class="btn sm" href="#/match/${m.id}/setup">Set up</a>` : `<a class="btn sm" href="#/match/${m.id}/score">Score</a>`}<a class="btn sm ghost" href="#/match/${m.id}/broadcast">Studio</a>${m.public ? `<a class="btn sm ghost" target="_blank" href="/m/?id=${m.id}">Public</a>` : ''}${m.mine !== false ? `<button class="btn sm ghost" style="color:#ff6b61" data-del="${m.id}" title="Delete match">Delete</button>` : ''}</div></div>`).join('');
 }
 
 // ---------- CRUD lists ----------
@@ -100,7 +107,8 @@ const tournamentsView = () => crud('tournaments', 'Tournaments', t => `<td><b>${
 async function matchesView() {
   shell('/matches', head('Matches') + sk(3)); await load(); const d = S.data;
   const draw = () => shell('/matches', head('Matches', '<button class="btn" data-new>+ New match</button>') + `<div class="grid">${matchCards(d.matches) || '<div class="panel">No matches yet.</div>'}</div>`);
-  draw(); const newMatch = async () => {
+  const paint = () => { draw(); $('[data-new]').onclick = newMatch; wireDelete(paint); };
+  const newMatch = async () => {
     if (d.teams.length < 2) return toast('Create two teams first', true);
     const FM = ['T20', 'T10', 'T5', 'T30', 'ODI', 'The Hundred', 'Tape', 'Tennis', 'Custom'];
     const v = await formModal({ title: 'Create match', submit: 'Create', fields: [{ k: 'tournamentId', label: 'Tournament (optional)', type: 'select', options: [['', 'Friendly / no tournament'], ...d.tournaments.map(t => [t.id, t.name])] },
@@ -111,7 +119,7 @@ async function matchesView() {
     if (!v) return; if (v.teamA === v.teamB) return toast('Pick two different teams', true);
     try { const r = await api('POST', '/api/matches', { ...v, overs: v.overs || undefined, maxOversPerBowler: v.maxOversPerBowler || undefined, officials: (v.officialsText || '').split(',').map(x => x.trim()).filter(Boolean) }); location.hash = `#/match/${r.id}/setup`; }
     catch (e) { toast(e.message, true); } };
-  $('[data-new]').onclick = newMatch; if (location.hash.includes('new=1')) { history.replaceState(null, '', '#/matches'); newMatch(); }
+  paint(); if (location.hash.includes('new=1')) { history.replaceState(null, '', '#/matches'); newMatch(); }
 }
 
 // ---------- match setup ----------

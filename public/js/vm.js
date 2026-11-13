@@ -29,7 +29,7 @@ const dismissText = (b, N) => {
 };
 const sr = (r, b) => (b ? +((r * 100) / b).toFixed(1) : 0);
 
-export function inningsCard(doc, inn) {
+export function inningsCard(doc, inn, withComm = false) {
   const N = names(doc), st = inn.state, bpo = st.rules.ballsPerOver, bat = inn.side, bowl = bat === 'A' ? 'B' : 'A';
   const batRows = Object.entries(st.batters).map(([id, b]) => ({ id, name: N[id]?.name || id, runs: b.runs, balls: b.balls, fours: b.fours, sixes: b.sixes,
     sr: sr(b.runs, b.balls), out: dismissText(b, N), isOut: !!b.out, strike: id === st.striker, atCrease: id === st.striker || id === st.nonStriker }));
@@ -43,6 +43,7 @@ export function inningsCard(doc, inn) {
   return { side: bat, team: doc.sides[bat].team.short, teamName: doc.sides[bat].team.name, bowlTeam: doc.sides[bowl].team.short,
     runs: st.runs, wkts: st.wickets, overs: overStr(st.legalBalls, bpo), bat: batRows, yetToBat: yet, bowl: bowlRows,
     extras: { total: extra, text: `${extra} (wd ${e.wide}, nb ${e.noball}, b ${e.bye}, lb ${e.legbye}, pen ${e.penalty})` },
+    ...(withComm ? { comm: st.balls.map(b => ({ o: `${b.over}.${b.ball}`, sym: b.sym, r: b.runs, bw: N[b.bowler]?.name || '', st: N[b.striker]?.name || '', w: b.wicket, dk: b.dk || null, ob: b.ob ? N[b.ob]?.name || '' : '', l: b.legal })) } : {}),
     ovr, fow: st.fow.map(f => ({ w: f.wicket, runs: f.runs, name: N[f.batter]?.name || f.batter, at: f.at })), status: st.status };
 }
 
@@ -61,7 +62,7 @@ export function buildVM(doc, extra = {}) {
   for (const s of ['A', 'B']) vm.xi[s] = (doc.xi?.[s] || []).map(id => ({ name: N[id]?.name, role: ROLE[N[id]?.role] || '', jersey: N[id]?.jersey || '',
     cap: doc.captain?.[s] === id, wk: doc.keeper?.[s] === id }));
   if (doc.potm) vm.potm = { name: N[doc.potm]?.name, team: doc.sides.A.players.some(p => p.id === doc.potm) ? T('A').name : T('B').name, line: doc.potmLine || '' };
-  vm.cards = doc.innings.map(i => inningsCard(doc, i));
+  vm.cards = doc.innings.map(i => inningsCard(doc, i, !!extra.commentary));
   if (doc.innings.length) {
     const inn = doc.innings[doc.cur], st = inn.state, bpo = st.rules.ballsPerOver, total = st.rules.oversLimit * bpo, left = Math.max(0, total - st.legalBalls);
     vm.bat = inn.side; vm.card = vm.cards[doc.cur];

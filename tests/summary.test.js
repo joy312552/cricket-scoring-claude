@@ -6,5 +6,5 @@ test('summary image draws with a stub canvas (no exceptions, brand text present)
   drawSummary(ctx, sampleVM(), { host: 'example.vercel.app', imgs: {} });
   const texts = calls.filter(c => c[0] === 'fillText').map(c => c[1][0]);
   assert.ok(texts.includes('CREASE') && texts.includes('SCORED LIVE ON CREASE') && texts.includes('example.vercel.app'));
-  assert.ok(texts.some(t => /WON BY/.test(t)) && texts.includes('PLAYER OF THE MATCH'));
+  assert.ok(texts.some(t => /WON BY/.test(t)) && texts.includes('PLAYER OF THE MATCH') && texts.includes('MATCH SUMMARY'));
 });

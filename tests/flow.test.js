@@ -63,7 +63,7 @@ test('full workflow: register -> teams -> match -> score -> undo -> broadcast ->
     const st = s.doc.innings[1].state; if (st.bowler === null) await cmd({ t: 'bowler', id: pa[st.prevBowler === pa[9] ? 8 : 9] });
     await cmd({ t: 'ball', runsBat: 0 }); }
   m = await ok('GET', `/api/matches/${id}`); assert.equal(m.doc.status, 'complete'); assert.match(m.doc.result.text, /Mymensingh Kings won by \d+ runs/);
-  const pub = await ok('GET', `/api/public/matches/${id}`); assert.equal(pub.vm.result.kind, 'won'); assert.equal(pub.vm.cards.length, 2);
+  const pub = await ok('GET', `/api/public/matches/${id}`); assert.equal(pub.vm.result.kind, 'won'); assert.equal(pub.vm.cards.length, 2); assert.ok(pub.vm.cards[0].comm.length > 5 && pub.vm.cards[0].comm[0].bw);
   // every graphic renders for both themes, mid-match and finished, without throwing
   const pv = (await ok('GET', `/api/overlay/${tok}?panel=points`)).vm;
   for (const th of ['arena', 'pulse', 'mohua']) {
@@ -74,6 +74,7 @@ test('full workflow: register -> teams -> match -> score -> undo -> broadcast ->
   assert.ok(panel('arena', 'result', pv).includes('won by'));
   assert.ok(panel('mohua', 'compareBar', pv).includes('<svg') && panel('mohua', 'compareLine', pv).includes('polyline'));
   assert.ok(panel('mohua', 'projected', pv).includes('x-kv') && panel('mohua', 'target', pv).includes('TO WIN'));
+  assert.ok(panel('mohua', 'resultBar', pv).includes('MATCH RESULT') && panel('arena', 'custom', pv).includes('x-tm two') && panel('pulse', 'summary', pv).includes('sum-grid'));
   assert.ok(ticker('mohua', pv).includes('sb th-mohua') && ticker('arena', pv).includes('class="sb-c"'));
   const lt = panel('pulse', 'batterCard', pv); assert.ok(lt.includes('class="lt ') && !lt.includes('sb-c'));
   assert.ok(panel('pulse', 'points', pv).includes('MYK'));

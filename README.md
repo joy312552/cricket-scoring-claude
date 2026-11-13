@@ -75,7 +75,10 @@ Share links use the form `/m/?id=MATCH_ID`, `/t/?id=TOURNAMENT_ID`, `/o/?t=TOKEN
 - **Lower thirds** (batter card, bowler card, officials, drinks, rain, resumption, Player of the Match, champions, sponsors, QR) appear in a strip above the bar so the game stays visible.
 - **Full panels** (scorecards, XIs, points table, charts, result, summary) use the centre of the screen.
 - FOUR, SIX, WICKET, NO BALL and other celebrations play inside the scoreboard bar, not full screen.
-- Transition sounds (whoosh and tone) play on show/hide. In OBS tick "Control audio via OBS" on the browser source to hear and mix them.
+- Two separate switches in Options: **Transition animations** and **Sound effects**. Sounds (whoosh, impact, crowd, brass) are synthesized in the browser. In OBS tick "Control audio via OBS" on the browser source to hear and mix them.
+- Celebrations fill the whole scoreboard bar and show only the event word (FOUR, SIX, WICKET, NO BALL ...).
+- Custom text shows both lines on the bowling side. A match-result graphic is available in the scoreboard sections.
+- The public match page follows a Cricbuzz-style layout (Live, Scorecard, Commentary, Squads, Info). Matches can be deleted from the Matches list.
 
 ## Themes
 

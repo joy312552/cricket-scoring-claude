@@ -51,12 +51,13 @@ export async function renderBroadcast(root, id, ctx) {
       <div class="grp"><h4>Options</h4><h4 class="mono" style="margin:8px 0 6px">Auto-hide timed graphics after</h4><div class="chips">${[[0, 'Manual'], [6, '6 s'], [10, '10 s'], [15, '15 s']].map(([v, l]) => `<span class="chip ${duration === v ? 'on' : ''}" data-dur="${v}">${l}</span>`).join('')}</div>
         <h4 class="mono" style="margin:12px 0 6px">Scoreboard position</h4><div class="chips">${['bottom', 'top'].map(v => `<span class="chip ${st.position === v ? 'on' : ''}" data-pos="${v}">${v}</span>`).join('')}</div>
         <h4 class="mono" style="margin:12px 0 6px">Theme</h4><div class="chips">${['arena', 'pulse', 'mohua'].map(v => `<span class="chip ${st.theme === v ? 'on' : ''}" data-th="${v}">${v.toUpperCase()}</span>`).join('')}</div>
-        <button class="sw2 ${st.sound ? 'on' : ''}" style="margin-top:12px" data-snd><span class="trk"></span><span>Transition and celebration sounds</span><em>ON</em></button></div></div>`;
+        <button class="sw2 ${st.transitions !== false ? 'on' : ''}" style="margin-top:12px" data-trn><span class="trk"></span><span>Transition animations</span><em>ON</em></button><button class="sw2 ${st.sound ? 'on' : ''}" data-snd><span class="trk"></span><span>Sound effects</span><em>ON</em></button></div></div>`;
     $$('[data-t]').forEach(b => b.onclick = () => toggle(b.dataset.t, b.dataset.i !== undefined ? { i: +b.dataset.i } : undefined));
     $('[data-tick]').onclick = () => { M.doc.settings.ticker = !tk; paint(); act({ action: 'ticker', on: !tk }); };
     $('[data-cusave]').onclick = () => act({ action: 'settings', patch: { custom: { left: $('#cu1').value, right: $('#cu2').value } } }, 'Saved');
     $$('[data-dur]').forEach(c => c.onclick = () => { duration = +c.dataset.dur; paint(); }); $$('[data-pos]').forEach(c => c.onclick = () => act({ action: 'settings', patch: { position: c.dataset.pos } })); $$('[data-th]').forEach(c => c.onclick = () => act({ action: 'settings', patch: { theme: c.dataset.th } }));
     $('[data-snd]').onclick = () => act({ action: 'settings', patch: { sound: !st.sound } });
+    $('[data-trn]').onclick = () => act({ action: 'settings', patch: { transitions: st.transitions === false } });
     $$('[data-fx]').forEach(c => c.onclick = () => act({ action: 'fx', fx: c.dataset.fx })); $('[data-replay]').onclick = () => act({ action: 'replay' }, 'Replaying'); $('[data-clear]').onclick = () => act({ action: 'clear' }, 'Cleared');
     $$('[data-ap]').forEach(c => c.onclick = () => act({ action: 'approve', seq: +c.dataset.ap })); $$('[data-dm]').forEach(c => c.onclick = () => act({ action: 'dismiss', seq: +c.dataset.dm }));
   }

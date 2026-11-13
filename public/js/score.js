@@ -112,6 +112,13 @@ export async function renderScore(root, id, ctx) {
   }
   function openPenalty() { const m = sheet('Penalty runs', `<label class="f"><span>Runs awarded to the batting team</span><input type="number" id="pr" value="5" min="1" max="10"></label>`, () => { const r = +$('#pr', m.el).value; m.close(); send({ t: 'penalty', runs: r }); }); }
 
+  function openMenu() {
+    const d = M.doc, m = sheet('Menu', `<div class="grid"><a class="btn ghost" href="#/match/${id}/broadcast" data-close>Broadcast studio</a>${d.public ? `<a class="btn ghost" target="_blank" href="/m/?id=${id}">Public scoreboard</a>` : ''}<button class="btn ghost" data-a="img">Match summary picture</button><button class="btn ghost" data-a="csv">Export deliveries (CSV)</button><button class="btn ghost" data-a="fin">Finish / abandon match</button><a class="btn ghost" href="#/matches" data-close>All matches</a></div>`, null);
+    $$('[data-close]', m.el).forEach(x => x.addEventListener('click', m.close));
+    $('[data-a=img]', m.el).onclick = () => { m.close(); openSummary(M.vm, `${location.origin}/m/?id=${id}`); };
+    $('[data-a=csv]', m.el).onclick = () => { m.close(); download(`/api/matches/${id}/export?format=csv`, `${id}.csv`).catch(e => toast(e.message, true)); };
+    $('[data-a=fin]', m.el).onclick = () => { m.close(); finishMenu(); };
+  }
   function startInnings2() {
     const d = M.doc, n = d.innings.length, last = d.innings[n - 1], so = n >= 2, bat = n % 2 === 1 ? (last.side === 'A' ? 'B' : 'A') : last.side, bowl = bat === 'A' ? 'B' : 'A';
     const target = n % 2 === 1 ? last.state.runs + 1 : null;
@@ -140,7 +147,7 @@ export async function renderScore(root, id, ctx) {
     con().innerHTML = `
      <div class="sc-top"><a class="mono" href="#/live">&larr; Matches</a><b style="font:800 22px var(--f-d)">${esc(d.name)}</b><span class="tag ${live ? 'live' : d.status === 'complete' ? 'ok' : 'lime'}">${d.status === 'break' ? 'Innings break' : d.status}</span>
       <span class="sync ${queue.length ? 'busy' : sync}">${queue.length ? `Queued ${queue.length}` : sync === 'ok' ? 'Online' : sync === 'busy' ? 'Syncing' : 'Offline'}</span><div style="flex:1"></div>
-      <a class="btn sm ghost" href="#/match/${id}/broadcast">Broadcast studio</a>${d.public ? `<a class="btn sm ghost" target="_blank" href="/m/?id=${id}">Public page</a>` : ''}<button class="btn sm ghost" data-simg>Summary picture</button><button class="btn sm ghost" data-exp>Export CSV</button><button class="btn sm ghost" data-fin>Finish</button></div>
+      <div class="sc-inline"><a class="btn sm ghost" href="#/match/${id}/broadcast">Broadcast studio</a>${d.public ? `<a class="btn sm ghost" target="_blank" href="/m/?id=${id}">Public page</a>` : ''}<button class="btn sm ghost" data-simg>Summary picture</button><button class="btn sm ghost" data-exp>Export CSV</button><button class="btn sm ghost" data-fin>Finish</button></div><button class="btn sm sc-menu" data-menu>Menu</button></div>
      ${queue.length ? `<div class="banner-s">${conflict ? `Sync stopped: ${esc(conflict)}.` : `${queue.length} entr${queue.length === 1 ? 'y is' : 'ies are'} saved on this device and will sync when you are back online.`} <button class="btn sm" data-retry>Retry</button> <button class="btn sm red" data-discard>Discard queued</button></div>` : ''}
      ${editing ? `<div class="banner-s">Editing the last ball. The next delivery you record replaces it. <button class="btn sm ghost" data-ce>Cancel</button></div>` : ''}
      ${d.status === 'break' ? `<div class="panel" style="margin-bottom:14px"><h3>${d.innings.length >= 2 ? 'Super Over' : 'Innings break'}</h3><p>${esc(vm.cards[d.innings.length - 1].teamName)} scored <b>${vm.cards[d.innings.length - 1].runs}/${vm.cards[d.innings.length - 1].wkts}</b> in ${vm.cards[d.innings.length - 1].overs} overs.</p><div class="actions"><button class="btn" data-i2>${d.innings.length >= 2 ? 'Start Super Over innings' : 'Start 2nd innings'}</button><button class="btn ghost" data-undo>Undo last ball</button></div></div>` : ''}
@@ -169,7 +176,8 @@ export async function renderScore(root, id, ctx) {
     $$('[data-bowler]', c).forEach(b => b.onclick = openBowler); $('[data-ret]', c)?.addEventListener('click', openRetire); $('[data-i2]', c)?.addEventListener('click', startInnings2); $('[data-fin]', c)?.addEventListener('click', finishMenu);
     $('[data-dead]', c)?.addEventListener('click', () => send({ t: 'dead' })); $('[data-rev]', c)?.addEventListener('click', openRevise);
     $('[data-so]', c)?.addEventListener('click', async () => { try { await api('POST', `/api/matches/${id}/superover`); await refresh(); } catch (e) { toast(e.message, true); } });
-    $('[data-simg]', c)?.addEventListener('click', () => openSummary(M.vm, `${location.origin}/m/?id=${id}`));
+    $$('[data-simg]', c).forEach(b => b.onclick = () => openSummary(M.vm, `${location.origin}/m/?id=${id}`));
+    $('[data-menu]', c)?.addEventListener('click', openMenu);
     $('[data-exp]', c)?.addEventListener('click', () => download(`/api/matches/${id}/export?format=csv`, `${id}.csv`).catch(e => toast(e.message, true)));
     $('[data-retry]', c)?.addEventListener('click', () => { conflict = ''; flush(); });
     $('[data-discard]', c)?.addEventListener('click', async () => { if (!await confirmBox('Delete the entries that have not synced? The server scorecard will be shown instead.')) return; queue = []; conflict = ''; await qPut(id, []); await refresh(); });
